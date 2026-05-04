@@ -1089,7 +1089,16 @@ export class GameEngine {
         if (this.comboT <= 0) this.combo = 0;
       }
       // AUTO 모드 — 카드 펼치기 + 자동 선택 (decision fatigue 제거)
-      if (this.autoReveal && !this.slot.active && !this.pendingRelicChoices && !this.pendingEvent) {
+      // 의사결정 모달이 열려 있을 때는 뒤에서 새 카드 공개/선택을 시작하지 않는다.
+      const autoBlocked =
+        !!this.pendingRelicChoices ||
+        !!this.pendingEvent ||
+        !!this.pendingRevival ||
+        !!this.waveBreakActive ||
+        !!this.pendingBranchChoices ||
+        this.tutorialQueue.length > 0 ||
+        this.stageCleared;
+      if (this.autoReveal && !this.slot.active && !autoBlocked) {
         if (this.cardChoices) {
           // 카드 등장 → 0.6초 후 자동 선택 (사용자가 확인할 시간)
           this._autoPickT -= dt;
@@ -2822,6 +2831,18 @@ export class GameEngine {
     return c;
   }
   beginSpin() {
+    if (
+      this.stageCleared ||
+      this.pendingRelicChoices ||
+      this.pendingEvent ||
+      this.pendingRevival ||
+      this.waveBreakActive ||
+      this.pendingBranchChoices ||
+      this.tutorialQueue.length > 0
+    ) {
+      Audio.ui_error();
+      return false;
+    }
     if (this.cardChoices || this.slot.active) return false;
     const cost = this.currentCardCost();
     const aliveCount = this.monsters.filter((m) => !m.dead).length;

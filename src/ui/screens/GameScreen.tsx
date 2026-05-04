@@ -343,6 +343,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     (!!snap.cardChoices || !!snap.slotActive);
 
   const eventDef = snap.pendingEvent ? EVENTS[snap.pendingEvent] : null;
+  const gameplayChoiceOpen = !!snap.cardChoices || !!snap.slotActive;
   const blockingDecisionOpen =
     !!snap.pendingRelicChoices ||
     !!snap.pendingEvent ||
@@ -354,16 +355,17 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const pauseMenuRequestedRef = useRef(false);
+  const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
   // 재개 메뉴는 사용자가 ⏸/Esc를 누른 경우에만 열고, 강제 모달 진입 시에는 닫기만 한다.
   useEffect(() => {
-    if (snap.pendingRevival || snap.waveBreakActive) {
+    if (blockingDecisionOpen || gameplayChoiceOpen) {
       pauseMenuRequestedRef.current = false;
       setShowPauseMenu(false);
     }
-  }, [snap.pendingRevival, snap.waveBreakActive]);
+  }, [blockingDecisionOpen, gameplayChoiceOpen]);
 
   // INPUT I-1: PC 키보드 단축키 (모바일은 영향 없음)
   // Space=카드 펼치기 / Q=Rally / E=필살기 / Esc=일시정지
@@ -377,6 +379,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         !!snap.cardChoices || !!snap.slotActive ||
         !!snap.pendingRelicChoices || !!snap.pendingEvent ||
         !!snap.pendingRevival || !!snap.waveBreakActive ||
+        !!snap.pendingBranchChoices ||
         (snap.tutorialQueue && snap.tutorialQueue.length > 0);
       if (e.key === 'Escape') {
         if (showQuitConfirm) { setShowQuitConfirm(false); e.preventDefault(); return; }
@@ -527,6 +530,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           !!snap.cardChoices || !!snap.slotActive ||
           !!snap.pendingRelicChoices || !!snap.pendingEvent ||
           !!snap.pendingRevival || !!snap.waveBreakActive ||
+          !!snap.pendingBranchChoices ||
           (snap.tutorialQueue && snap.tutorialQueue.length > 0);
         return (
           <button
@@ -723,7 +727,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       <div style={styles.bottom}>
         {/* 카드 영역 — 봉인 중(face-down) → 카드 공개(flip) 통합 */}
-        {!blockingDecisionOpen && (snap.slotActive || snap.cardChoices) && (
+        {!blockingDecisionOpen && !showPauseMenu && (snap.slotActive || snap.cardChoices) && (
           <div style={styles.cardArea}>
             <div style={styles.cardAreaLabel}>
               {snap.slotActive
@@ -740,7 +744,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         )}
 
         {/* 봉인 깨는 중 — face-down 카드 3장 (PNG 마법진) — 탭 시 즉시 결과 */}
-        {!blockingDecisionOpen && snap.slotActive && !snap.cardChoices && (
+        {!blockingDecisionOpen && !showPauseMenu && snap.slotActive && !snap.cardChoices && (
           <div
             style={styles.cards}
             onClick={() => eng()?.skipSlotReveal()}
@@ -767,7 +771,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           </div>
         )}
 
-        {!blockingDecisionOpen && snap.cardChoices && (
+        {!blockingDecisionOpen && !showPauseMenu && snap.cardChoices && (
           <>
             <div style={styles.cards} className="cards-fade-in">
               {snap.cardChoices.map((id: string, i: number) => {
@@ -927,7 +931,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         <div style={styles.actionRow}>
           {(() => {
             const cantReveal = snap.mp < snap.cardCost;
-            const busy = !!snap.cardChoices || snap.slotActive || blockingDecisionOpen;
+            const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu;
             const disabled = cantReveal || busy;
             const src = disabled
               ? '/sprites/btn_reveal_disabled.png'
@@ -1034,7 +1038,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               flex: 2,
             }}
             onClick={() => eng()?.rally()}
-            disabled={!snap.rallyReady}
+            disabled={!snap.rallyReady || controlsBlocked}
           >
             ⚡ 돌격{!snap.rallyReady && ` ${snap.rallyCdT?.toFixed(1)}s`}
           </button>
@@ -1048,7 +1052,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               color: snap.autoReveal ? '#fff' : '#bbb',
               border: snap.autoReveal ? '2px solid #FDCB6E' : '1px solid #4a3a6e',
             }}
-            onClick={() => eng()?.toggleAuto()}
+            onClick={() => {
+              if (!controlsBlocked) eng()?.toggleAuto();
+            }}
+            disabled={controlsBlocked}
             aria-label="AUTO 토글"
           >
             🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
@@ -1063,7 +1070,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               color: snap.speed !== 1 ? '#fff' : '#FDCB6E',
               border: snap.speed !== 1 ? '2px solid #FDCB6E' : '1px solid #7a5a30',
             }}
-            onClick={() => eng()?.toggleSpeed()}
+            onClick={() => {
+              if (!controlsBlocked) eng()?.toggleSpeed();
+            }}
+            disabled={controlsBlocked}
             aria-label="속도 토글"
           >
             ⏩ ×{snap.speed}
