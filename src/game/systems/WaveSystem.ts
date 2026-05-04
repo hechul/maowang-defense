@@ -10,11 +10,10 @@
  */
 
 /**
- * 웨이브 내 spawn 간격(초). 웨이브가 진행될수록 짧아지며, 0.6초로 하한.
- * 기존: Math.max(0.6, 1.6 - wave * 0.035)
+ * 웨이브 내 spawn 간격(초). MVP는 초반 학습 공간을 위해 조금 느리게 시작한다.
  */
 export function calculateWaveSpawnInterval(wave: number): number {
-  return Math.max(0.6, 1.6 - wave * 0.035);
+  return Math.max(0.8, 2.0 - wave * 0.04);
 }
 
 /**
@@ -25,7 +24,7 @@ export function calculateWaveSpawnInterval(wave: number): number {
 export function calculateLiveHeroCap(wave: number): number {
   if (wave >= 20) return 18;
   if (wave >= 10) return 14;
-  return 99;
+  return 9;
 }
 
 /** 5웨이브마다 보스. 1, 6, 11, ... wave는 보스 웨이브가 아님. */

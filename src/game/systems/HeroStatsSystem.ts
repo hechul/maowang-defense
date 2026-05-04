@@ -51,7 +51,7 @@ export interface HeroStatsResult {
  *   atkMul    = scale × hex × elite × newbie × edictAtk × bane
  *   spdMul    = hourglass × challengeHeroSpd
  *   atkSpdDiv = challengeHeroAtkSpd
- *   mpRewardMul = (1 + (wave-1)×0.05) × reaper × elite
+ *   mpRewardMul = (0.75 + (wave-1)×0.035) × reaper × elite
  * GameEngine.spawnHero 인라인 산식과 동일.
  */
 export function calculateHeroStats(input: HeroStatsInput): HeroStatsResult {
@@ -68,7 +68,7 @@ export function calculateHeroStats(input: HeroStatsInput): HeroStatsResult {
   const atkMul = scale * hexMul * eliteMul * newbieMul * input.edictEnemyAtkMul * baneMul;
   const spdMul = slowMul * input.challengeHeroSpdMul;
   const atkSpdDivisor = input.challengeHeroAtkSpdMul;
-  const mpRewardMul = (1 + (input.wave - 1) * 0.05) * reaperMul * eliteMul;
+  const mpRewardMul = (0.75 + (input.wave - 1) * 0.035) * reaperMul * eliteMul;
 
   return { scale, hpMul, atkMul, spdMul, atkSpdDivisor, mpRewardMul };
 }

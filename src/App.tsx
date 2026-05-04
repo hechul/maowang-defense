@@ -1,14 +1,11 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import { CastleHubScreen } from './ui/screens/CastleHubScreen';
 import { PrivacyScreen } from './ui/screens/PrivacyScreen';
 import { SupportScreen } from './ui/screens/SupportScreen';
 import { LoadingScreen } from './ui/components/LoadingScreen';
 import { IntroCutscene } from './ui/components/IntroCutscene';
-import { CutsceneOverlay } from './ui/components/CutsceneOverlay';
 import { useSaveStore } from './store/useSaveStore';
 import type { GameOverStats } from './game/GameEngine';
-import { findCutscene } from './game/data/cutscenes';
-import { progressInLevel } from './game/data/demonLevel';
 
 // 코드 스플리팅 (AIT §번들 최적화):
 // - 전투/스테이지/모집/스킬트리/도감 등 모두 lazy import
@@ -78,83 +75,6 @@ export default function App() {
   const [activeChallengeId, setActiveChallengeId] = useState<string | null>(null);
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<'stage' | 'endless' | 'daily'>('endless');
-
-  // P2-1: 컷씬 자동 트리거
-  const clearedStages = useSaveStore((s) => s.clearedStages);
-  const demonExp = useSaveStore((s) => s.demonExp);
-  const cutscenesSeen = useSaveStore((s) => s.cutscenesSeen);
-  const markCutsceneSeen = useSaveStore((s) => s.markCutsceneSeen);
-  const bossFirstKillSeen = useSaveStore((s) => s.bossFirstKillSeen);
-  const pendingCutsceneId = useMemo(() => {
-    // [W5] 챕터 시작 컷씬 — 그 챕터 어떤 스테이지든 클리어한 적 있으면 = 진입했음
-    const chapterStartTriggers: { chapter: string; csId: string; firstStage: string }[] = [
-      { chapter: 'ch1', csId: 'cs_ch1_start', firstStage: 'ch1_s1' },
-      { chapter: 'ch2', csId: 'cs_ch2_start', firstStage: 'ch2_s1' },
-      { chapter: 'ch3', csId: 'cs_ch3_start', firstStage: 'ch3_s1' },
-      { chapter: 'ch4', csId: 'cs_ch4_start', firstStage: 'ch4_s1' },
-      { chapter: 'ch5', csId: 'cs_ch5_start', firstStage: 'ch5_s1' },
-      { chapter: 'ch6', csId: 'cs_ch6_start', firstStage: 'ch6_s1' },
-    ];
-    for (const t of chapterStartTriggers) {
-      // 그 챕터의 어떤 스테이지든 클리어 = 진입한 적 있음
-      const hasEntered = clearedStages.some((sid) => sid.startsWith(t.chapter + '_'));
-      if (hasEntered && !cutscenesSeen.includes(t.csId)) return t.csId;
-    }
-    // N4 보스 첫 처치 컷씬 — 5편
-    const bossRecallTriggers: { boss: string; csId: string }[] = [
-      { boss: 'captain',  csId: 'cs_boss_recall_captain' },
-      { boss: 'archmage', csId: 'cs_boss_recall_archmage' },
-      { boss: 'saint',    csId: 'cs_boss_recall_saint' },
-      { boss: 'king',     csId: 'cs_boss_recall_king' },
-      { boss: 'priest',   csId: 'cs_boss_recall_priest' },
-    ];
-    for (const t of bossRecallTriggers) {
-      if (bossFirstKillSeen.includes(t.boss) && !cutscenesSeen.includes(t.csId)) return t.csId;
-    }
-    // chapter clear 컷씬 — 마지막 스테이지 클리어 직후
-    const chapterFinals: Record<string, string> = {
-      ch1_s5: 'cs_ch1_clear', ch2_s5: 'cs_ch2_clear', ch3_s5: 'cs_ch3_clear',
-      ch4_s5: 'cs_ch4_clear', ch5_s5: 'cs_ch5_clear', ch6_s5: 'cs_ch6_clear',
-    };
-    for (const [stage, csId] of Object.entries(chapterFinals)) {
-      if (clearedStages.includes(stage) && !cutscenesSeen.includes(csId)) return csId;
-    }
-    // 마왕 레벨 마일스톤
-    const lv = progressInLevel(demonExp).level;
-    const lvMilestones: { lv: number; cs: string }[] = [
-      { lv: 50, cs: 'cs_demon_level_50' },
-      { lv: 25, cs: 'cs_demon_level_25' },
-      { lv: 10, cs: 'cs_demon_level_10' },
-    ];
-    for (const m of lvMilestones) {
-      if (lv >= m.lv && !cutscenesSeen.includes(m.cs)) return m.cs;
-    }
-    return null;
-  }, [clearedStages, demonExp, cutscenesSeen, bossFirstKillSeen]);
-  const pendingCutscene = pendingCutsceneId ? findCutscene(pendingCutsceneId.includes(':') ? pendingCutsceneId : (() => {
-    const c = pendingCutsceneId;
-    // 매핑 — id로 조회
-    return (c === 'cs_ch1_start' ? 'chapter_start:ch1' :
-            c === 'cs_ch2_start' ? 'chapter_start:ch2' :
-            c === 'cs_ch3_start' ? 'chapter_start:ch3' :
-            c === 'cs_ch4_start' ? 'chapter_start:ch4' :
-            c === 'cs_ch5_start' ? 'chapter_start:ch5' :
-            c === 'cs_ch6_start' ? 'chapter_start:ch6' :
-            c === 'cs_ch1_clear' ? 'chapter_clear:ch1' :
-            c === 'cs_ch2_clear' ? 'chapter_clear:ch2' :
-            c === 'cs_ch3_clear' ? 'chapter_clear:ch3' :
-            c === 'cs_ch4_clear' ? 'chapter_clear:ch4' :
-            c === 'cs_ch5_clear' ? 'chapter_clear:ch5' :
-            c === 'cs_ch6_clear' ? 'chapter_clear:ch6' :
-            c === 'cs_boss_recall_captain' ? 'boss_first_kill:captain' :
-            c === 'cs_boss_recall_archmage' ? 'boss_first_kill:archmage' :
-            c === 'cs_boss_recall_saint' ? 'boss_first_kill:saint' :
-            c === 'cs_boss_recall_king' ? 'boss_first_kill:king' :
-            c === 'cs_boss_recall_priest' ? 'boss_first_kill:priest' :
-            c === 'cs_demon_level_10' ? 'demon_level:10' :
-            c === 'cs_demon_level_25' ? 'demon_level:25' :
-            c === 'cs_demon_level_50' ? 'demon_level:50' : '');
-  })()) : null;
 
   // GameScreen mount/unmount 폭주 방지: 콜백 안정화
   const handleGameOver = useCallback((s: GameOverStats) => {
@@ -262,13 +182,7 @@ export default function App() {
           {screen === 'throneRoom' && <ThroneRoomScreen onBack={goHub} />}
           {screen === 'memoryGame' && <MemoryGameScreen onBack={goHub} />}
         </Suspense>
-        {/* P2-1 컷씬 — 허브에서만 자동 발동 (게임 중 방해 X) */}
-        {pendingCutscene && screen === 'castleHub' && (
-          <CutsceneOverlay
-            cutscene={pendingCutscene}
-            onDone={() => markCutsceneSeen(pendingCutscene.id)}
-          />
-        )}
+        {/* MVP: 회상/스토리 컷씬은 도감에서 보관하고, 허브/전투 진입 흐름은 막지 않는다. */}
       </div>
     </div>
   );

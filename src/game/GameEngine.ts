@@ -92,6 +92,9 @@ import {
 const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
+const MONSTER_FRONT_X = W - 95;
+const MVP_FIRST_RELIC_WAVE = 4;
+const MVP_RELIC_INTERVAL = 4;
 
 interface UnitOpts {
   team: 'monster' | 'hero';
@@ -1005,10 +1008,9 @@ export class GameEngine {
       const surge = this.relics.has('surge') ? 3 : 1;
       const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
       const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
-      // 마력 자연회복 — 100억 권위자 비판 #2: 코어 루프 대기 시간 16% 단축
-      // 기존 2.5/sec (40초/100MP) → 3.5/sec (28초/100MP)
-      // 스테이지 modifier mpRegenMul 합산
-      this.addMP(dt * 3.5 * surge * mpRegenMul * this.stageMod.mpRegenMul);
+      // MVP 밸런스: 마력이 너무 빨리 차면 "계속 뽑으면 승리"가 된다.
+      // 자연 회복은 낮추고, 처치/위기 대응으로 소환 타이밍을 만들게 한다.
+      this.addMP(dt * 2.4 * surge * mpRegenMul * this.stageMod.mpRegenMul);
       // 5차 — 진화 유물 prophecy/necropolis/karma: 추가 마력 회복 (per second)
       const fusedMpAdd = this.fusedEffectAdd('mpRegenAdd');
       if (fusedMpAdd > 0) this.addMP(dt * fusedMpAdd);
@@ -1271,16 +1273,18 @@ export class GameEngine {
         this.bonusWaveUsed = false;
       }
       if (this.bonusWaveActive) this.bonusWaveUsed = true;
-      this.addMP(50);
+      this.addMP(25);
       // E-1: 매 웨이브 클리어 시 영혼석 +5 보너스
       this.queueBonusStones(5);
       // WaveSystem: 클리어 별점
       const stars = calculateClearStars(this.castleHp / this.castleMaxHp);
       const starText = '★ '.repeat(stars).trim() + ' ☆ '.repeat(3 - stars).trim();
-      this.showBanner(`WAVE ${this.wave} CLEAR`, starText, '#26de81', 1.4);
-      this.flashScreen('#26de81', 0.4);
-      this.shakeFx(8);
-      Audio.evolve_sfx();
+      if (isBossWave(this.wave) || this.wave <= 1) {
+        this.showBanner(`WAVE ${this.wave} CLEAR`, starText, '#26de81', 1.2);
+        this.flashScreen('#26de81', 0.3);
+        this.shakeFx(6);
+        Audio.evolve_sfx();
+      }
       // WaveSystem: 마일스톤 (W10/W15/W20/W25/W50/W100)
       const milestone = getMilestoneForWave(this.wave);
       if (milestone) {
@@ -1386,11 +1390,10 @@ export class GameEngine {
       // QO Q-3: 첫 wave 클리어 안내 (1회만)
       if (clearedWave === 1 && (useSaveStore.getState().runs ?? 0) <= 1) {
         this.showBanner('✅ 웨이브 1 클리어!', '5웨이브마다 보스가 등장합니다', '#26de81', 2.0);
-      } else {
+      } else if (isBossWave(this.wave)) {
         // QO Q-4: 다음 wave가 보스 wave면 사전 안내
-        const nextIsBoss = isBossWave(this.wave);
-        const subText = nextIsBoss ? `⚡ 보스 등장 — ${BOSSES[bossForWave(this.wave)]?.name ?? ''}` : '준비!';
-        this.showBanner(`다음: WAVE ${this.wave}`, subText, nextIsBoss ? '#FF6B6B' : '#FFEAA7', nextIsBoss ? 1.6 : 1.0);
+        const subText = `⚡ 보스 등장 — ${BOSSES[bossForWave(this.wave)]?.name ?? ''}`;
+        this.showBanner(`다음: WAVE ${this.wave}`, subText, '#FF6B6B', 1.4);
       }
       // 결정 단계 활성화 — runs >= 3 + 영혼석 30 이상일 때만 (첫 런 좌절 방지)
       // 매 5웨이브 단위 (wave 6/11/16...)
@@ -1442,7 +1445,11 @@ export class GameEngine {
       }
       // 25% 이벤트, 75% 유물
       // BUG-003: wave-break 활성 시 즉시 띄우지 않고 wave-break 종료 후로 지연 (직렬화)
-      if (this.wave > 2 && this.wave <= 25) {
+      const shouldOfferReward =
+        this.wave >= MVP_FIRST_RELIC_WAVE &&
+        this.wave <= 25 &&
+        (this.wave - MVP_FIRST_RELIC_WAVE) % MVP_RELIC_INTERVAL === 0;
+      if (shouldOfferReward) {
         const fire = () => {
           if (Math.random() < 0.25) {
             this.offerEvent();
@@ -1526,13 +1533,10 @@ export class GameEngine {
       () => {
         this.pendingRelicChoices = choices;
         this.paused = true;
-        // TUT-6: 첫 유물 모달 학습 — 모달 띄울 때만 큐
-        this.queueTutorial(
-          'tut_relic',
-          '💎 유물 선택',
-          '웨이브 클리어 보상 — 1개 선택.\n\n• 이번 런 동안 영구 효과\n• 재선택 불가\n\n💡 자주 픽한 카드와 어울리는 유물을 고르세요.',
-          '💎',
-        );
+        if (!useSaveStore.getState().hasTutorialSeen('tut_relic')) {
+          useSaveStore.getState().markTutorialSeen('tut_relic');
+          this.showBanner('💎 유물 선택', '이번 런 동안 유지되는 보상 1개', '#FDCB6E', 1.2);
+        }
       },
       'relicChoice',
     );
@@ -2076,7 +2080,16 @@ export class GameEngine {
           }
         }
       } else if (u.attackPhase === 0) {
-        u.x += Math.sign(dx) * u.effSpd() * dt;
+        const dir = Math.sign(dx);
+        if (u.team === 'monster' && dir > 0 && u.x >= MONSTER_FRONT_X) {
+          // MVP 전선 고정: 근접 몬스터가 화면 오른쪽 끝까지 따라가 사라지지 않게 한다.
+          // 용사가 다가오면 다시 사거리 안에서 교전한다.
+          u.x = MONSTER_FRONT_X;
+          u._isMoving = false;
+          return;
+        }
+        u.x += dir * u.effSpd() * dt;
+        if (u.team === 'monster') u.x = Math.min(u.x, MONSTER_FRONT_X);
         u.walkT += dt;
         u._isMoving = true;
       }
@@ -2366,13 +2379,10 @@ export class GameEngine {
         if (this.combo === 5) {
           this.addMP(20);
           subText = '마력 +20!';
-          // TUT-5a: 첫 5콤보 도달 학습 — 핵심만, 후속 마일스톤은 발동 시점에 banner로 안내
-          this.queueTutorial(
-            'tut_combo5',
-            '🔥 5 COMBO!',
-            '연속 처치를 이어가면 콤보가 쌓입니다.\n\n방금 5콤보 보상: 마력 +20!\n5초 안에 다음 적을 처치하면 콤보 유지.',
-            '🔥',
-          );
+          if (!useSaveStore.getState().hasTutorialSeen('tut_combo5')) {
+            useSaveStore.getState().markTutorialSeen('tut_combo5');
+            this.showBanner('🔥 5 COMBO!', '마력 +20 / 빠르게 처치하면 콤보 유지', '#FDCB6E', 1.2);
+          }
         }
         // 10콤보 — 모든 적 0.5초 freeze
         else if (this.combo === 10) {
@@ -2428,14 +2438,12 @@ export class GameEngine {
       this.ulti.gauge = Math.min(this.ulti.max, this.ulti.gauge + gain);
       if (this.ulti.gauge >= this.ulti.max) {
         this.ulti.ready = true;
-        // TUT-10: 첫 필살기 충전 학습
+        // MVP: 필살기 안내는 플레이를 멈추지 않는 배너로 처리
         if (!wasReady) {
-          this.queueTutorial(
-            'tut_ulti_ready',
-            '✨ 필살기 충전!',
-            '우측 보라색 버튼이 빛납니다 — 탭으로 발동.\n\n위급한 순간 또는 보스에 사용하세요.',
-            '✨',
-          );
+          if (!useSaveStore.getState().hasTutorialSeen('tut_ulti_ready')) {
+            useSaveStore.getState().markTutorialSeen('tut_ulti_ready');
+            this.showBanner('✨ 필살기 충전!', '우측 버튼으로 위기 때 발동', '#a55eea', 1.2);
+          }
         }
       }
       // greed: 용사 처치 시 영혼석 +1 (gameOver에서 합산되도록 큐에 누적)
@@ -2792,12 +2800,8 @@ export class GameEngine {
         }
         // TUT-3: 첫 시너지 풀모달 학습
         if (firstSynergyEver) {
-          this.queueTutorial(
-            'tut_synergy',
-            '🌀 시너지 발동!',
-            `같은 태그 카드를 모으면 시너지가 발동됩니다.\n\n방금: ${syn.name} — ${syn.desc}\n\n좌상단 🌀 칩 탭으로 진행도 확인.`,
-            '🌀',
-          );
+          useSaveStore.getState().markTutorialSeen('tut_synergy');
+          this.showBanner('🌀 시너지 발동!', `${syn.name} — ${syn.desc}`, '#a55eea', 1.3);
           this._synergyShown = true;
           firstSynergyEver = false;
         }
@@ -2875,13 +2879,9 @@ export class GameEngine {
     Audio.cardReveal_start();
     trackMissionProgress('cardReveal', 1, 'add');
     // QA H-3: 5회 카드 펼치기 후 AUTO 모드 안내 1회 (autoReveal OFF 상태 + tut 미시청)
-    if (this.cardRevealCount === 5 && !this.autoReveal) {
-      this.queueTutorial(
-        'tut_auto',
-        '🔁 AUTO 모드',
-        '하단 🔁 AUTO 버튼을 켜면 카드를 자동으로 펼쳐서 자동으로 선택합니다.\n\n• 카드 등장 후 0.6초 뒤 최적의 카드 자동 선택\n• 진화/시너지 우선 알고리즘 사용\n• 언제든 다시 끌 수 있어요',
-        '🔁',
-      );
+    if (this.cardRevealCount === 5 && !this.autoReveal && !useSaveStore.getState().hasTutorialSeen('tut_auto')) {
+      useSaveStore.getState().markTutorialSeen('tut_auto');
+      this.showBanner('🔁 AUTO 모드', '하단 AUTO 버튼으로 자동 선택', '#26de81', 1.2);
     }
     // CardSystem: 후보 3장 생성 위임
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
@@ -3374,12 +3374,8 @@ export class GameEngine {
     const isFirstPickEver = !useSaveStore.getState().hasTutorialSeen('tut_first_pick')
       && this.killCount === 0;
     if (isFirstPickEver) {
-      this.queueTutorial(
-        'tut_first_pick',
-        '✅ 몬스터 소환!',
-        '카드를 골라 몬스터가 소환됐습니다.\n\n💡 같은 몬스터 3마리를 모으면 진화합니다.\n다음 카드에서 같은 종류를 노려보세요.',
-        '✅',
-      );
+      useSaveStore.getState().markTutorialSeen('tut_first_pick');
+      this.showBanner('✅ 몬스터 소환!', '같은 몬스터를 모으면 진화', '#26de81', 1.2);
     }
 
     // 태그 픽 카운트 갱신 (P2-8 동적 가중치)
