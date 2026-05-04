@@ -356,6 +356,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const pauseMenuRequestedRef = useRef(false);
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
+  const showDemonSpeech =
+    !!snap.demonLine &&
+    (snap.bossActive || snap.demonMood === 'urgent');
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
@@ -556,22 +559,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
       )}
 
-      {/* Rally 인디케이터 — 학습(3회 사용) 후 페이드 / 쿨다운 중에만 표시 */}
-      {/* QA H-4: 첫 카드 픽 시 Rally hint 숨김 (정보 과부하 완화) */}
-      {!isFirstCardReveal && ((snap.rallyUsedCount ?? 0) < 3 || !snap.rallyReady) && (
-        <div style={{
-          ...styles.rallyHint,
-          opacity: snap.rallyReady ? 0.9 : 0.45,
-          ...((snap.rallyUsedCount ?? 0) === 0 ? styles.rallyHintFirst : {}),
-        }}>
-          {(snap.rallyUsedCount ?? 0) === 0
-            ? '👆 탭=돌격 / 장탭=어둠의 손(30 마력)'
-            : `⚡ 돌격 ${snap.rallyReady ? '준비' : `(${snap.rallyCdT?.toFixed(1)}s)`}`}
-        </div>
-      )}
-
-      {/* OVERHAUL §3.4: 마왕 대사 말풍선 (좌상단 마왕 초상 옆) */}
-      {snap.demonLine && (
+      {/* MVP: 평상시 랜덤 대사는 화면을 과하게 흔들어서 위급/보스 상황에서만 노출 */}
+      {showDemonSpeech && (
         <div style={{
           ...styles.demonSpeech,
           opacity: 1 - Math.max(0, (snap.demonLine.progress - 0.7) / 0.3),
@@ -641,11 +630,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       })()}
 
       {/* QO Q-6: 진화 임박 (살아있는 같은 종류 evoNeed-1 도달) */}
-      {!snap.bossActive && (snap.evoImminentTypes || []).length > 0 && !snap.cardChoices && !snap.slotActive && (
-        <div style={styles.evoImminent}>
-          ⚡ 진화 임박: {(snap.evoImminentTypes as string[]).slice(0, 2).map((id) => MONSTERS[id]?.name || id).join(', ')}
-        </div>
-      )}
+      {/* MVP: 진화 임박은 카드 선택지 안의 배지로만 보여주고 상단 HUD에서는 숨김 */}
 
       {snap.bossActive && (
         <div style={styles.bossHp}>
@@ -662,16 +647,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {/* 시너지 — 컴팩트 모드 (활성 개수 + 임박 시그널만 / 탭 시 펼침) */}
       {/* QA H-4: 첫 카드 픽 시 시너지 칩 숨김 */}
-      {!isFirstCardReveal && synergyProgressCount > 0 && (
+      {!isFirstCardReveal && activeSynergyCount > 0 && (
         <button
           style={styles.synergyCompact}
           onClick={() => setSynergyExpanded(!synergyExpanded)}
           aria-label="시너지 보기"
         >
-          🌀 {activeSynergyCount > 0 ? `${activeSynergyCount}활성` : `${synergyProgressCount}진행`}
-          {snap.synergyProgress?.some((sp: any) => !sp.active && sp.count >= sp.need - 1) && (
-            <span style={styles.synergyNearSignal}> 임박!</span>
-          )}
+          🌀 {activeSynergyCount}활성
           <span style={styles.synergyTapHint}>↗</span>
         </button>
       )}

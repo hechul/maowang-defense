@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useSaveStore } from '../../store/useSaveStore';
 import { recommendedNextStage } from '../../game/data/stages';
 import { SKILLS, skillCost } from '../../game/data/skilltree';
-import { DEMON_LINES_START, pickDemonLine } from '../../game/data/demonLines';
 import { progressInLevel } from '../../game/data/demonLevel';
 import type { ScreenId } from '../../App';
 
@@ -12,7 +11,7 @@ interface Props {
 
 /**
  * MVP 허브 — 기존 게임 포맷은 유지하되 첫 화면 정보량을 강하게 줄인다.
- * 살리는 것: 마왕성/대사/전투/강화/도감/기존 전투 엔진.
+ * 살리는 것: 마왕성/전투/강화/도감/기존 전투 엔진.
  * 숨기는 것: 시즌, PvP, 친구, 상점, 우편함, 이벤트, 인테리어 등 부가 메뉴.
  */
 export function CastleHubScreen({ onNavigate }: Props) {
@@ -26,7 +25,6 @@ export function CastleHubScreen({ onNavigate }: Props) {
   const demonExp = useSaveStore((s) => s.demonExp);
 
   const nextStage = recommendedNextStage(clearedStages);
-  const demonLine = useMemo(() => pickDemonLine(DEMON_LINES_START).text, [runs]);
   const level = progressInLevel(demonExp).level;
 
   const upgradableSkills = useMemo(() => {
@@ -58,8 +56,7 @@ export function CastleHubScreen({ onNavigate }: Props) {
           <div style={styles.demonFigure}>{getDemonIcon(bestWave)}</div>
         </div>
         <div style={styles.demonBubble}>
-          <div style={styles.demonName}>— 마왕 <span style={styles.lvTag}>LV.{level}</span></div>
-          <div style={styles.demonText}>{demonLine}</div>
+          <div style={styles.demonName}>마왕 <span style={styles.lvTag}>LV.{level}</span></div>
           <div style={styles.coreLoop}>전투 → 영혼석 획득 → 강화 → 더 높은 웨이브</div>
         </div>
       </div>
