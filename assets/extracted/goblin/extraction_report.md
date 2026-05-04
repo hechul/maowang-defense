@@ -1,0 +1,15 @@
+# extraction_report — goblin_sheet.png
+- input: `public\sprites\goblin_sheet.png`
+- output dir: `assets\extracted\goblin`
+- input size: 1448×1086
+- alpha used: False
+- bg colors: [(248, 248, 248), (240, 240, 240)]
+- tolerance: 24
+- mode: grid
+- rows×cols: 3×4
+- saved sprites: 12
+- skipped empty cells: 0
+- suspicious (low alpha): none
+- resize: 32 (NEAREST only)
+- bottom-align: True
+- align-per-row: True

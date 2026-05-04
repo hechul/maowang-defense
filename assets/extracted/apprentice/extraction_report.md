@@ -1,0 +1,15 @@
+# extraction_report — apprentice.png
+- input: `public\sprites\apprentice.png`
+- output dir: `assets\extracted\apprentice`
+- input size: 2508×627
+- alpha used: False
+- bg colors: [(248, 248, 248), (240, 240, 240)]
+- tolerance: 24
+- mode: grid
+- rows×cols: 1×4
+- saved sprites: 4
+- skipped empty cells: 0
+- suspicious (low alpha): none
+- resize: 32 (NEAREST only)
+- bottom-align: True
+- align-per-row: True

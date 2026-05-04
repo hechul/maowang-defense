@@ -1,0 +1,28 @@
+{
+  "input": "public\\sprites\\apprentice.png",
+  "output": "assets\\extracted\\apprentice",
+  "size": [
+    2508,
+    627
+  ],
+  "alpha_used": false,
+  "bg_colors": [
+    [
+      248,
+      248,
+      248
+    ],
+    [
+      240,
+      240,
+      240
+    ]
+  ],
+  "tolerance": 24,
+  "mode": "grid",
+  "rows": 1,
+  "cols": 4,
+  "saved": 4,
+  "skipped_empty": 0,
+  "suspicious": []
+}

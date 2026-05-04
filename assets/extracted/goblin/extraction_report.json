@@ -1,0 +1,28 @@
+{
+  "input": "public\\sprites\\goblin_sheet.png",
+  "output": "assets\\extracted\\goblin",
+  "size": [
+    1448,
+    1086
+  ],
+  "alpha_used": false,
+  "bg_colors": [
+    [
+      248,
+      248,
+      248
+    ],
+    [
+      240,
+      240,
+      240
+    ]
+  ],
+  "tolerance": 24,
+  "mode": "grid",
+  "rows": 3,
+  "cols": 4,
+  "saved": 12,
+  "skipped_empty": 0,
+  "suspicious": []
+}
