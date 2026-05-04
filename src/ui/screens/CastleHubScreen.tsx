@@ -10,9 +10,7 @@ interface Props {
 }
 
 /**
- * MVP 허브 — 기존 게임 포맷은 유지하되 첫 화면 정보량을 강하게 줄인다.
- * 살리는 것: 마왕성/전투/강화/도감/기존 전투 엔진.
- * 숨기는 것: 시즌, PvP, 친구, 상점, 우편함, 이벤트, 인테리어 등 부가 메뉴.
+ * MVP 허브 — 사용자가 해야 할 일을 한눈에 알 수 있게 정보 위계를 단순화한다.
  */
 export function CastleHubScreen({ onNavigate }: Props) {
   const stones = useSaveStore((s) => s.soulstones);
@@ -38,110 +36,130 @@ export function CastleHubScreen({ onNavigate }: Props) {
     return count;
   }, [skills, stones, runs]);
 
+  const nextTitle = nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '심연 방어전';
+  const nextBody = nextStage
+    ? `웨이브 ${nextStage.waveLimit}까지 버티고 보스를 처치하세요.`
+    : '모든 스테이지를 넘겼습니다. 더 깊은 웨이브에 도전하세요.';
+
   return (
     <div style={styles.root}>
-      <div style={styles.header}>
-        <div style={styles.title}>마왕성 방어전</div>
-        <div style={styles.subtitle}>카드로 몬스터를 소환해 용사 침공을 막아라</div>
-        <div style={styles.statRow}>
-          <span style={styles.stat}>💎 {stones}</span>
-          <span style={styles.stat}>📈 최고 W{bestWave}</span>
-          <span style={styles.stat}>👹 부하 {recruitedIds.length}</span>
-        </div>
-      </div>
+      <div style={styles.bgGlow} />
 
-      <div style={styles.demonRoom}>
-        <div style={styles.demonAvatar} className="demon-idle">
-          <div style={styles.demonOrb} />
-          <div style={styles.demonFigure}>{getDemonIcon(bestWave)}</div>
-        </div>
-        <div style={styles.demonBubble}>
-          <div style={styles.demonName}>마왕 <span style={styles.lvTag}>LV.{level}</span></div>
-          <div style={styles.coreLoop}>전투 → 영혼석 획득 → 강화 → 더 높은 웨이브</div>
-        </div>
-      </div>
+      <header style={styles.header}>
+        <div style={styles.eyebrow}>카드 디펜스 RPG</div>
+        <h1 style={styles.title}>마왕성 방어전</h1>
+        <p style={styles.subtitle}>카드를 골라 부하를 소환하고, 몰려오는 용사를 막으세요.</p>
+      </header>
 
-      <button
-        style={styles.cta}
-        className="hub-cta-pulse"
-        onClick={() => onNavigate('game')}
-      >
-        <div style={styles.ctaTop}>바로 시작</div>
-        <div style={styles.ctaName}>⚔ 전투 시작</div>
-        <div style={styles.ctaSub}>카드 3장 중 하나를 골라 마왕성을 지키세요</div>
-      </button>
-
-      <div style={styles.goalCard}>
-        <div>
-          <div style={styles.goalLabel}>다음 목표</div>
-          <div style={styles.goalTitle}>{nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '심연 방어전'}</div>
-          <div style={styles.goalText}>
-            {nextStage
-              ? `웨이브 ${nextStage.waveLimit}까지 버티고 보스를 처치하세요.`
-              : '모든 스테이지를 넘겼습니다. 이제 더 깊은 웨이브에 도전하세요.'}
+      <section style={styles.statusPanel} aria-label="현재 상태">
+        <div style={styles.demonBadge}>
+          <div style={styles.demonIcon}>{getDemonIcon(bestWave)}</div>
+          <div>
+            <div style={styles.demonLabel}>마왕</div>
+            <div style={styles.demonLevel}>LV.{level}</div>
           </div>
         </div>
-        <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>작전 지도</button>
-      </div>
+        <Stat label="영혼석" value={stones.toLocaleString()} />
+        <Stat label="최고 기록" value={`W${bestWave}`} />
+      </section>
 
-      <div style={styles.roomSection}>
-        <div style={styles.sectionLabel}>핵심 메뉴</div>
-        <div style={styles.roomsGrid}>
-          <RoomTile
+      <main style={styles.mainCard}>
+        <div style={styles.goalBlock}>
+          <div style={styles.goalLabel}>지금 목표</div>
+          <div style={styles.goalTitle}>{nextTitle}</div>
+          <div style={styles.goalText}>{nextBody}</div>
+        </div>
+
+        <button
+          style={styles.primaryCta}
+          className="hub-cta-pulse"
+          onClick={() => onNavigate('game')}
+        >
+          <span style={styles.ctaIcon}>⚔</span>
+          <span style={styles.ctaText}>전투 시작</span>
+          <span style={styles.ctaSub}>바로 플레이</span>
+        </button>
+
+        <button style={styles.secondaryCta} onClick={() => onNavigate('stageSelect')}>
+          작전 지도에서 스테이지 보기
+        </button>
+      </main>
+
+      <section style={styles.actionsSection}>
+        <div style={styles.sectionHead}>성장 메뉴</div>
+        <div style={styles.actionList}>
+          <ActionCard
             icon="🏛"
-            label="영혼 강화"
-            hint={upgradableSkills > 0 ? `${upgradableSkills}개 강화 가능` : '죽어도 영구 성장'}
-            badge={upgradableSkills > 0 ? String(upgradableSkills) : null}
-            accent="#FDCB6E"
+            title="영혼 강화"
+            body={upgradableSkills > 0 ? `${upgradableSkills}개 강화 가능` : '전투 후 영구 성장'}
+            badge={upgradableSkills > 0 ? '추천' : null}
             onClick={() => onNavigate('skills')}
           />
-          <RoomTile
-            icon="📖"
-            label="도감"
-            hint={`발견 ${discoveredMonsters.length}`}
-            badge={discoveredMonsters.length > 0 ? '!' : null}
-            accent="#a55eea"
-            onClick={() => onNavigate('bestiary')}
-          />
-          <RoomTile
+          <ActionCard
             icon="👹"
-            label="모집소"
-            hint="카드 풀 관리"
+            title="모집소"
+            body={`현재 부하 ${recruitedIds.length}종`}
             badge={null}
-            accent="#26de81"
             onClick={() => onNavigate('recruit')}
           />
+          <ActionCard
+            icon="📖"
+            title="도감"
+            body={`발견한 적/부하 ${discoveredMonsters.length}종`}
+            badge={discoveredMonsters.length > 0 ? '새 기록' : null}
+            onClick={() => onNavigate('bestiary')}
+          />
         </div>
-      </div>
-
-      <div style={styles.lockedSection}>
-        <div style={styles.sectionLabel}>MVP에서 잠시 숨긴 기능</div>
-        <div style={styles.lockedGrid}>
-          {['시즌', 'PvP', '친구', '상점', '우편함', '이벤트', '인테리어', '미니게임'].map((label) => (
-            <div key={label} style={styles.lockedChip}>🔒 {label}</div>
-          ))}
-        </div>
-      </div>
-
-      <div style={styles.footer}>
-        <button style={styles.smallBtn} onClick={() => onNavigate('privacy')}>개인정보</button>
-        <button style={styles.smallBtn} onClick={() => onNavigate('support')}>고객지원</button>
-      </div>
+      </section>
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          👋 처음 목표는 단순합니다. <b>전투 시작</b>을 눌러 5웨이브 보스를 막아보세요.
+          처음이라면 <b>전투 시작</b>만 누르면 됩니다. 나머지는 전투 후 천천히 보세요.
         </div>
       )}
 
+      <footer style={styles.footer}>
+        <button style={styles.smallBtn} onClick={() => onNavigate('privacy')}>개인정보</button>
+        <button style={styles.smallBtn} onClick={() => onNavigate('support')}>고객지원</button>
+      </footer>
+
       <style>{`
         @keyframes hubCtaPulse {
-          0%,100% { box-shadow: 0 4px 0 #4a0a0a, 0 0 16px rgba(253,121,168,0.55); }
-          50%     { box-shadow: 0 4px 0 #4a0a0a, 0 0 28px rgba(253,121,168,0.95); }
+          0%,100% { box-shadow: 0 10px 22px rgba(214,48,49,0.32), inset 0 1px 0 rgba(255,255,255,0.22); }
+          50%     { box-shadow: 0 12px 34px rgba(253,203,110,0.42), inset 0 1px 0 rgba(255,255,255,0.28); }
         }
-        .hub-cta-pulse { animation: hubCtaPulse 1.6s ease-in-out infinite; }
+        .hub-cta-pulse { animation: hubCtaPulse 1.8s ease-in-out infinite; }
       `}</style>
     </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
+  );
+}
+
+function ActionCard({ icon, title, body, badge, onClick }: {
+  icon: string;
+  title: string;
+  body: string;
+  badge: string | null;
+  onClick: () => void;
+}) {
+  return (
+    <button style={styles.actionCard} onClick={onClick}>
+      <span style={styles.actionIcon}>{icon}</span>
+      <span style={styles.actionCopy}>
+        <span style={styles.actionTitle}>{title}</span>
+        <span style={styles.actionBody}>{body}</span>
+      </span>
+      {badge && <span style={styles.actionBadge}>{badge}</span>}
+      <span style={styles.actionArrow}>›</span>
+    </button>
   );
 }
 
@@ -152,133 +170,241 @@ function getDemonIcon(bestWave: number): string {
   return '🦇';
 }
 
-function RoomTile({ icon, label, hint, badge, accent, onClick }: {
-  icon: string;
-  label: string;
-  hint: string;
-  badge: string | null;
-  accent: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      style={{
-        ...styles.room,
-        borderColor: accent,
-        boxShadow: `0 3px 0 #15102a, 0 0 6px ${accent}55`,
-      }}
-      onClick={onClick}
-    >
-      <div style={styles.roomIcon}>{icon}</div>
-      <div style={styles.roomLabel}>{label}</div>
-      <div style={styles.roomHint}>{hint}</div>
-      {badge && <div style={{ ...styles.roomBadge, background: accent }}>{badge}</div>}
-    </button>
-  );
-}
-
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    position: 'absolute', inset: 0,
-    background: 'radial-gradient(ellipse at 50% 0%, #2D1B4E 0%, #1a0c30 35%, #0a0820 70%, #000 100%)',
-    color: '#FFEAA7',
-    padding: '12px 12px calc(12px + env(safe-area-inset-bottom, 0))',
+    position: 'absolute',
+    inset: 0,
     overflow: 'auto',
+    color: '#FFF6D8',
+    padding: '14px 16px calc(16px + env(safe-area-inset-bottom, 0))',
+    background: 'linear-gradient(180deg,#12091f 0%,#21113a 46%,#07040d 100%)',
+    fontFamily: '"Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif',
   },
-  header: { textAlign: 'center', marginBottom: 10 },
-  title: {
-    fontSize: 24, fontWeight: 'bold', letterSpacing: 4,
-    color: '#FD79A8',
-    textShadow: '2px 2px 0 #000, 0 0 12px rgba(253,121,168,0.6)',
-    marginBottom: 5,
+  bgGlow: {
+    position: 'fixed',
+    inset: 0,
+    pointerEvents: 'none',
+    background:
+      'radial-gradient(circle at 50% -8%, rgba(253,203,110,0.22), transparent 32%), radial-gradient(circle at 10% 58%, rgba(214,48,49,0.2), transparent 30%), radial-gradient(circle at 90% 72%, rgba(38,222,129,0.12), transparent 28%)',
   },
-  subtitle: { fontSize: 10, color: '#FFEAA7', marginBottom: 7, opacity: 0.86 },
-  statRow: { display: 'flex', justifyContent: 'center', gap: 8, fontSize: 10, color: '#FFEAA7', flexWrap: 'wrap' },
-  stat: { background: 'rgba(20,12,42,0.7)', border: '1px solid #4a3a6e', padding: '3px 7px', borderRadius: 4 },
-  demonRoom: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    background: 'linear-gradient(180deg,rgba(58,29,142,0.6),rgba(20,12,42,0.6))',
-    border: '1.5px solid #7B2D8E', borderRadius: 8,
-    padding: '8px 10px', marginBottom: 10,
-    boxShadow: 'inset 0 0 12px rgba(123,45,142,0.4)',
-  },
-  demonAvatar: { position: 'relative', width: 44, height: 44, flexShrink: 0 },
-  demonOrb: {
-    position: 'absolute', inset: 0,
-    background: 'radial-gradient(circle,#7B2D8E,#1a0828)',
-    border: '1.5px solid #FDCB6E', borderRadius: '50%',
-    boxShadow: '0 0 8px rgba(253,121,168,0.5)',
-  },
-  demonFigure: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 },
-  demonBubble: { flex: 1, minWidth: 0 },
-  demonName: { fontSize: 9, color: '#FD79A8', letterSpacing: 1 },
-  demonText: { fontSize: 11, color: '#FFEAA7', marginTop: 2, fontStyle: 'italic', lineHeight: 1.4 },
-  coreLoop: { fontSize: 9, color: '#FDCB6E', marginTop: 5 },
-  lvTag: { color: '#FDCB6E', fontSize: 9, marginLeft: 4, fontWeight: 'bold' },
-  cta: {
-    width: '100%',
-    background: 'radial-gradient(ellipse at 50% 30%, #FF7675 0%, #D63031 50%, #7a1818 100%)',
-    border: '3px solid #FDCB6E', borderRadius: 10,
-    padding: '14px 16px',
-    color: '#fff', fontFamily: 'inherit', cursor: 'pointer',
-    marginBottom: 10, textAlign: 'center',
-    boxShadow: '0 4px 0 #4a0a0a',
-  },
-  ctaTop: { fontSize: 10, color: '#FDCB6E', letterSpacing: 2, marginBottom: 2 },
-  ctaName: { fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
-  ctaSub: { fontSize: 9, color: '#FFEAA7', marginTop: 3, opacity: 0.86 },
-  goalCard: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-    background: 'rgba(20,12,42,0.72)', border: '1px solid #4a3a6e', borderRadius: 8,
-    padding: '9px 10px', marginBottom: 12,
-  },
-  goalLabel: { fontSize: 8, color: '#a55eea', letterSpacing: 2, fontWeight: 'bold' },
-  goalTitle: { fontSize: 13, color: '#FFEAA7', fontWeight: 'bold', marginTop: 2 },
-  goalText: { fontSize: 9, color: '#bbb', marginTop: 2, lineHeight: 1.35 },
-  mapBtn: {
-    flexShrink: 0,
-    background: 'rgba(123,45,142,0.6)', border: '1px solid #FD79A8',
-    color: '#FFEAA7', fontSize: 9, padding: '8px 8px',
-    borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit',
-  },
-  roomSection: { marginBottom: 12 },
-  sectionLabel: { fontSize: 9, color: '#a55eea', letterSpacing: 2, fontWeight: 'bold', marginBottom: 6, paddingLeft: 2 },
-  roomsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 },
-  room: {
+  header: {
     position: 'relative',
-    background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
-    border: '2px solid #4a3a6e', borderRadius: 8,
-    padding: '10px 4px',
-    color: '#FFEAA7', fontFamily: 'inherit', cursor: 'pointer',
-    minHeight: 78,
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    textAlign: 'left',
+    marginBottom: 12,
   },
-  roomIcon: { fontSize: 24, lineHeight: 1, marginBottom: 4 },
-  roomLabel: { fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
-  roomHint: { fontSize: 8, color: '#bbb', marginTop: 2 },
-  roomBadge: {
-    position: 'absolute', top: 4, right: 4,
-    color: '#fff', fontSize: 9, fontWeight: 'bold',
-    padding: '1px 5px', borderRadius: 8,
-    minWidth: 12, textAlign: 'center',
+  eyebrow: {
+    color: '#FDCB6E',
+    fontSize: 12,
+    letterSpacing: 0.2,
+    fontWeight: 800,
+    marginBottom: 6,
   },
-  lockedSection: { marginBottom: 10 },
-  lockedGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 },
-  lockedChip: {
-    background: 'rgba(20,12,42,0.45)', border: '1px dashed #4a3a6e',
-    color: '#888', borderRadius: 5, padding: '6px 2px',
-    textAlign: 'center', fontSize: 8,
+  title: {
+    margin: 0,
+    color: '#FFFFFF',
+    fontSize: 29,
+    lineHeight: 1.05,
+    letterSpacing: -0.8,
+    textShadow: '0 3px 14px rgba(0,0,0,0.65)',
+    whiteSpace: 'nowrap',
   },
-  footer: { display: 'flex', justifyContent: 'center', gap: 8, marginTop: 6 },
-  smallBtn: {
-    background: 'transparent', border: '1px solid #4a3a6e',
-    color: '#888', padding: '4px 10px', borderRadius: 4,
-    fontFamily: 'inherit', cursor: 'pointer', fontSize: 10,
+  subtitle: {
+    margin: '7px 0 0',
+    color: 'rgba(255,246,216,0.78)',
+    fontSize: 13,
+    lineHeight: 1.45,
+    wordBreak: 'keep-all',
   },
+  statusPanel: {
+    position: 'relative',
+    display: 'grid',
+    gridTemplateColumns: '1.15fr 1fr 1fr',
+    gap: 8,
+    marginBottom: 10,
+  },
+  demonBadge: {
+    minHeight: 56,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    padding: '8px 9px',
+    borderRadius: 16,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(253,203,110,0.32)',
+    backdropFilter: 'blur(8px)',
+  },
+  demonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: 22,
+    background: 'linear-gradient(180deg,#41215e,#12091f)',
+    border: '1px solid rgba(253,203,110,0.45)',
+  },
+  demonLabel: { color: 'rgba(255,246,216,0.66)', fontSize: 11, whiteSpace: 'nowrap' },
+  demonLevel: { color: '#FFFFFF', fontSize: 16, fontWeight: 900, marginTop: 2 },
+  statCard: {
+    minHeight: 56,
+    padding: '8px 9px',
+    borderRadius: 16,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  statLabel: { color: 'rgba(255,246,216,0.58)', fontSize: 10, marginBottom: 4, whiteSpace: 'nowrap' },
+  statValue: { color: '#FFFFFF', fontSize: 16, fontWeight: 900, lineHeight: 1.1 },
+  mainCard: {
+    position: 'relative',
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 12,
+    background: 'linear-gradient(180deg,rgba(255,246,216,0.14),rgba(255,246,216,0.06))',
+    border: '1px solid rgba(253,203,110,0.34)',
+    boxShadow: '0 18px 40px rgba(0,0,0,0.32)',
+  },
+  goalBlock: {
+    marginBottom: 12,
+  },
+  goalLabel: {
+    color: '#FDCB6E',
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 1.2,
+    marginBottom: 7,
+  },
+  goalTitle: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    fontWeight: 900,
+    lineHeight: 1.15,
+    marginBottom: 6,
+  },
+  goalText: {
+    color: 'rgba(255,246,216,0.8)',
+    fontSize: 13,
+    lineHeight: 1.45,
+    wordBreak: 'keep-all',
+  },
+  primaryCta: {
+    width: '100%',
+    minHeight: 72,
+    border: 0,
+    borderRadius: 18,
+    cursor: 'pointer',
+    color: '#FFFFFF',
+    fontFamily: 'inherit',
+    background: 'linear-gradient(180deg,#FF6B6B 0%,#D63031 58%,#7a1818 100%)',
+    display: 'grid',
+    gridTemplateColumns: '44px 1fr',
+    gridTemplateRows: '1fr 1fr',
+    alignItems: 'center',
+    columnGap: 10,
+    padding: '12px 15px',
+    textAlign: 'left',
+  },
+  ctaIcon: {
+    gridRow: '1 / span 2',
+    width: 44,
+    height: 44,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: 14,
+    background: 'rgba(0,0,0,0.22)',
+    fontSize: 24,
+  },
+  ctaText: { fontSize: 22, fontWeight: 950, lineHeight: 1, letterSpacing: -0.4 },
+  ctaSub: { color: 'rgba(255,255,255,0.75)', fontSize: 12, alignSelf: 'start' },
+  secondaryCta: {
+    width: '100%',
+    marginTop: 9,
+    padding: '11px 14px',
+    borderRadius: 14,
+    border: '1px solid rgba(253,203,110,0.32)',
+    background: 'rgba(0,0,0,0.22)',
+    color: '#FDCB6E',
+    fontFamily: 'inherit',
+    fontSize: 14,
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+  actionsSection: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  sectionHead: {
+    color: 'rgba(255,246,216,0.72)',
+    fontSize: 13,
+    fontWeight: 900,
+    margin: '0 0 8px 2px',
+  },
+  actionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  actionCard: {
+    width: '100%',
+    minHeight: 58,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '9px 12px',
+    borderRadius: 17,
+    border: '1px solid rgba(255,255,255,0.13)',
+    background: 'rgba(255,255,255,0.075)',
+    color: '#FFF6D8',
+    fontFamily: 'inherit',
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  actionIcon: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: 14,
+    background: 'rgba(0,0,0,0.22)',
+    fontSize: 24,
+  },
+  actionCopy: { flex: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 },
+  actionTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: 900 },
+  actionBody: { color: 'rgba(255,246,216,0.66)', fontSize: 12, lineHeight: 1.3 },
+  actionBadge: {
+    color: '#12091f',
+    background: '#FDCB6E',
+    borderRadius: 999,
+    padding: '4px 7px',
+    fontSize: 10,
+    fontWeight: 900,
+    flexShrink: 0,
+  },
+  actionArrow: { color: 'rgba(255,246,216,0.45)', fontSize: 25, lineHeight: 1 },
   firstHint: {
-    marginTop: 8, padding: '8px 10px',
-    background: 'linear-gradient(180deg,rgba(123,45,142,0.4),rgba(20,12,42,0.4))',
-    border: '1px solid #FD79A8', borderRadius: 6,
-    fontSize: 10, color: '#FFEAA7', lineHeight: 1.4,
+    position: 'relative',
+    marginTop: 12,
+    padding: '12px 14px',
+    borderRadius: 16,
+    background: 'rgba(38,222,129,0.1)',
+    border: '1px solid rgba(38,222,129,0.34)',
+    color: 'rgba(255,246,216,0.86)',
+    fontSize: 13,
+    lineHeight: 1.45,
+    wordBreak: 'keep-all',
+  },
+  footer: { position: 'relative', display: 'flex', justifyContent: 'center', gap: 8, marginTop: 14 },
+  smallBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.12)',
+    color: 'rgba(255,246,216,0.45)',
+    padding: '7px 12px',
+    borderRadius: 999,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    fontSize: 11,
   },
 };
