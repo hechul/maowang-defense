@@ -343,15 +343,24 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     (!!snap.cardChoices || !!snap.slotActive);
 
   const eventDef = snap.pendingEvent ? EVENTS[snap.pendingEvent] : null;
+  const blockingDecisionOpen =
+    !!snap.pendingRelicChoices ||
+    !!snap.pendingEvent ||
+    !!snap.pendingRevival ||
+    !!snap.waveBreakActive ||
+    !!snap.pendingBranchChoices ||
+    !!(snap.tutorialQueue && snap.tutorialQueue.length > 0);
 
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const pauseMenuRequestedRef = useRef(false);
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
   // 재개 메뉴는 사용자가 ⏸/Esc를 누른 경우에만 열고, 강제 모달 진입 시에는 닫기만 한다.
   useEffect(() => {
     if (snap.pendingRevival || snap.waveBreakActive) {
+      pauseMenuRequestedRef.current = false;
       setShowPauseMenu(false);
     }
   }, [snap.pendingRevival, snap.waveBreakActive]);
@@ -371,9 +380,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         (snap.tutorialQueue && snap.tutorialQueue.length > 0);
       if (e.key === 'Escape') {
         if (showQuitConfirm) { setShowQuitConfirm(false); e.preventDefault(); return; }
-        if (showPauseMenu) { setShowPauseMenu(false); if (snap.paused) eng()?.togglePause(); e.preventDefault(); return; }
+        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); if (snap.paused) eng()?.togglePause(); e.preventDefault(); return; }
         if (modalActive) return;
         if (!snap.paused) eng()?.togglePause();
+        pauseMenuRequestedRef.current = true;
         setShowPauseMenu(true);
         e.preventDefault();
         return;
@@ -524,6 +534,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             onClick={() => {
               if (modalActive) return;
               if (!snap.paused) eng()?.togglePause();
+              pauseMenuRequestedRef.current = true;
               setShowPauseMenu(true);
             }}
             disabled={modalActive}
@@ -712,7 +723,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       <div style={styles.bottom}>
         {/* 카드 영역 — 봉인 중(face-down) → 카드 공개(flip) 통합 */}
-        {(snap.slotActive || snap.cardChoices) && (
+        {!blockingDecisionOpen && (snap.slotActive || snap.cardChoices) && (
           <div style={styles.cardArea}>
             <div style={styles.cardAreaLabel}>
               {snap.slotActive
@@ -729,7 +740,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         )}
 
         {/* 봉인 깨는 중 — face-down 카드 3장 (PNG 마법진) — 탭 시 즉시 결과 */}
-        {snap.slotActive && !snap.cardChoices && (
+        {!blockingDecisionOpen && snap.slotActive && !snap.cardChoices && (
           <div
             style={styles.cards}
             onClick={() => eng()?.skipSlotReveal()}
@@ -756,7 +767,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           </div>
         )}
 
-        {snap.cardChoices && (
+        {!blockingDecisionOpen && snap.cardChoices && (
           <>
             <div style={styles.cards} className="cards-fade-in">
               {snap.cardChoices.map((id: string, i: number) => {
@@ -916,7 +927,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         <div style={styles.actionRow}>
           {(() => {
             const cantReveal = snap.mp < snap.cardCost;
-            const busy = !!snap.cardChoices || snap.slotActive;
+            const busy = !!snap.cardChoices || snap.slotActive || blockingDecisionOpen;
             const disabled = cantReveal || busy;
             const src = disabled
               ? '/sprites/btn_reveal_disabled.png'
@@ -1232,7 +1243,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 접근성 토글 — 일시정지 메뉴 안 — 사용자 store 직접 접근 */}
 
       {/* 일시정지 메뉴 — 게임 도중 안전한 탈출 / 설정 */}
-      {showPauseMenu && (
+      {showPauseMenu && pauseMenuRequestedRef.current && (
         <div style={styles.pauseOverlay} onClick={(e) => e.stopPropagation()}>
           <div style={styles.pauseCard}>
             <h2 style={styles.pauseTitle}>일시정지</h2>
@@ -1244,6 +1255,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             <button
               style={styles.pauseBtnPrimary}
               onClick={() => {
+                pauseMenuRequestedRef.current = false;
                 if (snap.paused) eng()?.togglePause();
                 setShowPauseMenu(false);
               }}
@@ -1268,7 +1280,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             <AccessibilityToggles />
             <button
               style={styles.pauseQuitBtn}
-              onClick={() => setShowQuitConfirm(true)}
+                onClick={() => setShowQuitConfirm(true)}
             >
               ⏏ 포기하고 나가기
             </button>

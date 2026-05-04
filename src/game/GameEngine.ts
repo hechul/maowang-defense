@@ -911,9 +911,10 @@ export class GameEngine {
     const flagsForDerive = this.getOverlayFlags();
     const derived = derivePaused(flagsForDerive);
     if (this.cardChoices || this.slot.active) {
-      // cardChoice 인 경우 — runs > 5 이거나 AUTO 면 sim block 안 함
+      // cardChoice 인 경우 — runs > 5 이거나 AUTO 면 sim block 안 함.
+      // slot.active는 카드 공개 애니메이션 단계라 멈추면 finalizeSlot까지 진행되지 않는다.
       const runs = useSaveStore.getState().runs;
-      const cardBlocks = runs <= 5 && !this.autoReveal;
+      const cardBlocks = !!this.cardChoices && runs <= 5 && !this.autoReveal;
       // 다른 BLOCKS_SIM overlay가 있으면 그게 우선 → derived 그대로
       const otherBlocks = activeOverlays(flagsForDerive)
         .some((o) => o !== 'cardChoice' && o !== 'riskChoice'
@@ -930,6 +931,11 @@ export class GameEngine {
       this.paused = derived;
     }
     const dt = this.paused ? 0 : rawDt * this.speed;
+
+    // 카드 공개 애니메이션은 UI 진행이므로 simulation pause와 무관하게 흘러야 한다.
+    // 초보자 카드 선택 정지, wave-break, 튜토리얼 pause 중에도 여기서 멈추면
+    // "봉인 깨는 중..." 상태가 영구 지속된다.
+    this.updateSlot(rawDt);
 
     if (!this.paused) {
       // HIT-STOP 우선 (짧은 시간 정지, slowmo와 별개)
@@ -953,7 +959,6 @@ export class GameEngine {
         this.updateProjectiles(stepDt);
       }
       this.updateParticles(effDt);
-      this.updateSlot(rawDt);  // 카드 공개 애니메이션은 실시간
       // 이펙트 업데이트
       for (const e of this.effects) e.age += rawDt;
       this.effects = this.effects.filter((e) => e.age < e.life);
@@ -5065,8 +5070,9 @@ export class GameEngine {
       // 단계 2: togglePause로 명시된 사용자 pause만 인식
       pausedByUser: this.overlayQueue.userPauseActive,
       resultActive: this.state === 'gameover',
-      // 단계 5: 진화/보스 컷씬 + 리스크 슬롯
-      cutsceneActive: this.slowMoT > 0 || this.hitStopT > 0,
+      // slowMo/hitStop은 시간 배율 연출이지 모달 pause가 아니다.
+      // overlay로 취급하면 paused 상태에서 타이머가 줄지 않아 영구 정지될 수 있다.
+      cutsceneActive: false,
       riskCardInSlot: !!this.riskCardSlot,
     };
   }
