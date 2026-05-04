@@ -18,10 +18,10 @@ const upgrades = [
 ];
 
 const monsters = [
-  { icon: '🟣', name: '슬라임', role: '탱커', note: '앞에서 시간을 번다.' },
-  { icon: '🟢', name: '고블린', role: '근접 딜러', note: '빠르게 달려들어 공격한다.' },
-  { icon: '💀', name: '스켈레톤', role: '물량', note: '여럿이 모이면 강해진다.' },
-  { icon: '🔥', name: '임프', role: '원거리', note: '불꽃으로 뒤에서 지원한다.' },
+  { image: '/sprites/slime_f1.png', name: '슬라임', role: '탱커', note: '앞에서 시간을 번다.' },
+  { image: '/sprites/goblin_f1.png', name: '고블린', role: '근접 딜러', note: '빠르게 달려들어 공격한다.' },
+  { image: '/sprites/skel_f1.png', name: '스켈레톤', role: '물량', note: '여럿이 모이면 강해진다.' },
+  { image: '/sprites/imp_f1.png', name: '임프', role: '원거리', note: '불꽃으로 뒤에서 지원한다.' },
 ];
 
 function screenTitle(screen: Screen) {
@@ -34,7 +34,7 @@ function screenTitle(screen: Screen) {
 export function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const statusText = useMemo(() => {
-    if (screen === 'home') return '핵심 루프만 남긴 MVP 셸';
+    if (screen === 'home') return '기존 에셋을 살린 MVP 셸';
     if (screen === 'battle') return '다음 브랜치에서 Canvas 전장을 연결';
     if (screen === 'upgrade') return '죽고 얻은 영혼석으로 영구 성장';
     return '카드와 적 정보를 천천히 확장';
@@ -84,13 +84,17 @@ export function App() {
 function HomeScreen({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   return (
     <div className="screen-content home-screen">
+      <img className="game-logo" src="/sprites/logo_main.png" alt="마왕키우기" />
+
       <div className="demon-card">
-        <div className="demon-orb" aria-hidden="true">👑</div>
+        <div className="demon-orb" aria-hidden="true">
+          <img src="/sprites/demon_lord_48.png" alt="" />
+        </div>
         <div>
           <p className="eyebrow">봉인된 마왕</p>
           <h1>성을 지키고, 죽을수록 강해진다.</h1>
           <p className="lead">
-            지금 MVP에서는 복잡한 시즌/PVP/상점은 숨기고 카드 소환 디펜스의 핵심만 검증합니다.
+            기존 AI 프로토타입의 캐릭터와 픽셀아트 무드는 살리고, MVP에서는 카드 소환 디펜스의 핵심만 검증합니다.
           </p>
         </div>
       </div>
@@ -114,17 +118,24 @@ function BattleScreen() {
   return (
     <div className="screen-content battle-screen">
       <div className="battlefield-preview">
-        <div className="castle">🏰</div>
+        <img className="castle-sprite" src="/sprites/castle_main.png" alt="마왕성" />
         <div className="lane">
           <span className="summon-point">소환</span>
           <span className="enemy-point">용사</span>
         </div>
+        <img className="enemy-sprite" src="/sprites/captain_64.png" alt="기사단장" />
+        <div className="ally-line" aria-hidden="true">
+          <img src="/sprites/slime_f1.png" alt="" />
+          <img src="/sprites/goblin_f1.png" alt="" />
+          <img src="/sprites/skel_f1.png" alt="" />
+        </div>
       </div>
       <div className="card-tray-preview">
-        {['슬라임', '고블린', '스켈레톤'].map((card) => (
-          <button type="button" key={card}>
+        {monsters.slice(0, 3).map((card, index) => (
+          <button className={index === 1 ? 'rare-card' : ''} type="button" key={card.name}>
             <span>카드</span>
-            <strong>{card}</strong>
+            <img src={card.image} alt="" />
+            <strong>{card.name}</strong>
           </button>
         ))}
       </div>
@@ -167,7 +178,7 @@ function BestiaryScreen() {
       <div className="monster-grid">
         {monsters.map((monster) => (
           <article key={monster.name} className="monster-card">
-            <span>{monster.icon}</span>
+            <img src={monster.image} alt="" />
             <strong>{monster.name}</strong>
             <small>{monster.role}</small>
             <p>{monster.note}</p>
