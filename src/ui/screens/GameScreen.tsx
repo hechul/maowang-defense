@@ -347,14 +347,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
 
-  // BUG-001: 일시정지 시 자동 메뉴 노출. pendingRevival 진입 시 강제 닫기 (race 방지)
+  // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
+  // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
+  // 재개 메뉴는 사용자가 ⏸/Esc를 누른 경우에만 열고, 강제 모달 진입 시에는 닫기만 한다.
   useEffect(() => {
     if (snap.pendingRevival || snap.waveBreakActive) {
       setShowPauseMenu(false);
-      return;
     }
-    if (snap.paused) setShowPauseMenu(true);
-  }, [snap.paused, snap.pendingRevival, snap.waveBreakActive]);
+  }, [snap.pendingRevival, snap.waveBreakActive]);
 
   // INPUT I-1: PC 키보드 단축키 (모바일은 영향 없음)
   // Space=카드 펼치기 / Q=Rally / E=필살기 / Esc=일시정지
