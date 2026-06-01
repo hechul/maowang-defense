@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSaveStore } from '../../store/useSaveStore';
 import { RECRUITS, type RecruitDefinition } from '../../game/data/recruits';
-import { BUILDS } from '../../game/data/builds';
 import { getStageById } from '../../game/data/stages';
 
 interface Props {
@@ -11,6 +10,7 @@ interface Props {
 }
 
 type RecruitTab = 'available' | 'owned' | 'locked';
+const VISIBLE_TABS: RecruitTab[] = ['available', 'owned'];
 
 const TAB_LABELS: Record<RecruitTab, string> = {
   available: '모집 가능',
@@ -48,7 +48,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
     if (hasAvailable) return 'available';
     const hasOwned = recruited.length > 0;
     if (hasOwned) return 'owned';
-    return 'locked';
+    return 'available';
   })();
   const [tab, setTab] = useState<RecruitTab>(initialTab);
 
@@ -73,7 +73,6 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
 
   // 카드풀 — 모집된 + MONSTERS에 알려진 (현재 deck 크기)
   const deckSize = recruited.length;
-  const totalRecruits = RECRUITS.length;
 
   const onRecruit = (rec: RecruitDefinition) => {
     if (!recruitMonster(rec.monsterId, rec.cost.soulstones)) return;
@@ -116,20 +115,6 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
             <span style={styles.rarityTag}> · {rec.roleLabel}</span>
           </div>
           <div style={styles.story}>{rec.description}</div>
-          {rec.tags.length > 0 && (
-            <div style={styles.tags}>
-              {rec.tags.map((t) => <span key={t} style={styles.tag}>#{t}</span>)}
-            </div>
-          )}
-          {rec.recommendedForBuilds && rec.recommendedForBuilds.length > 0 && (
-            <div style={styles.buildHint}>
-              💡 {rec.recommendedForBuilds
-                .map((bid) => BUILDS.find((b) => b.id === bid))
-                .filter((b): b is NonNullable<typeof b> => !!b)
-                .map((b) => `${b.icon}${b.name}`)
-                .join(' / ')}
-            </div>
-          )}
           {/* 상태별 안내 */}
           {owned && (
             <div style={styles.statusOwned}>✓ 카드풀 편입됨</div>
@@ -206,8 +191,8 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
       {/* 카드풀 현황 — 모집 → 카드 의식 편입 안내 */}
       <div style={styles.deckBar}>
         <span style={styles.deckLabel}>카드풀</span>
-        <span style={styles.deckSize}>{deckSize}<span style={styles.deckTotal}>/{totalRecruits}</span></span>
-        <span style={styles.deckHint}>· 모집한 몬스터만 카드 등장</span>
+        <span style={styles.deckSize}>{deckSize}종</span>
+        <span style={styles.deckHint}>· 모집한 부하만 전투 카드로 등장</span>
       </div>
 
       {toast && (
@@ -220,7 +205,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
 
       {/* 탭 */}
       <div style={styles.tabs}>
-        {(['available', 'owned', 'locked'] as RecruitTab[]).map((t) => {
+        {VISIBLE_TABS.map((t) => {
           const count =
             t === 'available' ? availableList.length :
             t === 'owned' ? ownedList.length :
@@ -248,7 +233,6 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
             새 스테이지를 클리어하면 모집 후보가 추가됩니다.
           </>)}
           {tab === 'owned' && '아직 모집한 몬스터가 없습니다.'}
-          {tab === 'locked' && '🌑 모든 단서가 풀렸다.'}
         </div>
       ) : (
         <div style={styles.list}>{activeList.map(renderCard)}</div>
@@ -312,8 +296,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   deckLabel: { fontSize: 10, color: '#a55eea', letterSpacing: 1, fontWeight: 'bold' },
   deckSize: { fontSize: 13, color: '#FFEAA7', fontWeight: 'bold' },
-  deckTotal: { fontSize: 10, color: '#888', fontWeight: 'normal' },
-  deckHint: { fontSize: 9, color: '#888', flex: 1, textAlign: 'right' },
+  deckHint: { fontSize: 10, color: '#aaa', flex: 1, textAlign: 'right', lineHeight: 1.3 },
   lockHint: {
     background: 'rgba(20,12,42,0.6)',
     border: '1px dashed #4a3a6e',
@@ -383,18 +366,12 @@ const styles: Record<string, React.CSSProperties> = {
   cardBody: { flex: 1, minWidth: 0 },
   monName: { fontSize: 13, fontWeight: 'bold', color: '#FFEAA7' },
   rarityTag: { fontSize: 9, color: '#a55eea', marginLeft: 4 },
-  story: { fontSize: 9, color: '#bbb', marginTop: 2, lineHeight: 1.3 },
-  tags: { fontSize: 8, color: '#888', marginTop: 2 },
-  tag: { marginRight: 4 },
-  buildHint: {
-    fontSize: 9, color: '#FDCB6E', marginTop: 3,
-    fontStyle: 'italic',
-  },
+  story: { fontSize: 10, color: '#c7bdd6', marginTop: 2, lineHeight: 1.35 },
   statusOwned: {
-    fontSize: 9, color: '#26de81', marginTop: 4, fontWeight: 'bold',
+    fontSize: 10, color: '#26de81', marginTop: 4, fontWeight: 'bold',
   },
   statusHint: {
-    fontSize: 9, color: '#a55eea', marginTop: 4, fontStyle: 'italic',
+    fontSize: 10, color: '#b77aff', marginTop: 4, fontStyle: 'italic',
   },
   cardRight: { flexShrink: 0, alignSelf: 'center' },
   recruitBtn: {

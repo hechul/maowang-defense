@@ -2,6 +2,8 @@
  * 개인정보 처리방침 — AIT 검수 요건 §운영
  * "개인정보 처리방침 링크가 있는가?" 통과
  */
+import { ENABLE_MONETIZATION } from '../../config/mvpFlags';
+
 export function PrivacyScreen({ onBack }: { onBack: () => void }) {
   return (
     <div style={styles.root}>
@@ -24,7 +26,7 @@ export function PrivacyScreen({ onBack }: { onBack: () => void }) {
         <ul style={styles.ul}>
           <li>게임 서비스 제공 및 진행 상황 저장</li>
           <li>리더보드 및 랭킹 시스템 운영</li>
-          <li>광고 및 결제 서비스 제공</li>
+          {ENABLE_MONETIZATION && <li>광고 및 결제 서비스 제공</li>}
           <li>버그 수정 및 게임 품질 개선</li>
         </ul>
 
@@ -37,7 +39,9 @@ export function PrivacyScreen({ onBack }: { onBack: () => void }) {
         <h2 style={styles.h2}>4. 개인정보 제3자 제공</h2>
         <p style={styles.p}>
           어둠의 군주는 이용자의 개인정보를 외부에 제공하지 않습니다.
-          광고 및 결제 처리는 토스 자체 시스템을 통해 이루어집니다.
+          {ENABLE_MONETIZATION
+            ? ' 광고 및 결제 처리는 토스 자체 시스템을 통해 이루어집니다.'
+            : ' 현재 MVP에서는 광고 및 결제 처리가 비활성화되어 있습니다.'}
         </p>
 
         <h2 style={styles.h2}>5. 이용자 권리</h2>

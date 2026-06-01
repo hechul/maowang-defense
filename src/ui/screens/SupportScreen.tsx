@@ -2,6 +2,8 @@
  * 고객 문의 — AIT 검수 요건 §운영
  * "고객 문의 채널이 있는가?" 통과
  */
+import { ENABLE_MONETIZATION } from '../../config/mvpFlags';
+
 // 빌드 시 env로 교체 가능 (.env.production 에 VITE_SUPPORT_EMAIL=...)
 const SUPPORT_EMAIL =
   (import.meta.env.VITE_SUPPORT_EMAIL as string | undefined) ||
@@ -17,7 +19,8 @@ export function SupportScreen({ onBack }: { onBack: () => void }) {
       <div style={styles.body}>
         <p style={styles.p}>
           어둠의 군주: 카드 던전을 즐겨주셔서 감사합니다.
-          버그, 결제, 게임 관련 문의는 아래 채널로 연락해 주세요.
+          버그, 게임 관련 문의는 아래 채널로 연락해 주세요.
+          {ENABLE_MONETIZATION ? ' 결제 문의도 함께 접수합니다.' : ''}
         </p>
 
         <div style={styles.card}>
@@ -38,7 +41,9 @@ export function SupportScreen({ onBack }: { onBack: () => void }) {
         <div style={styles.card}>
           <div style={styles.label}>💡 자주 묻는 질문</div>
           <ul style={styles.ul}>
-            <li><b>결제가 안 되어요</b> — 토스앱 결제 메뉴에서 처리 상태 확인 후 다시 시도해 주세요.</li>
+            {ENABLE_MONETIZATION && (
+              <li><b>결제가 안 되어요</b> — 토스앱 결제 메뉴에서 처리 상태 확인 후 다시 시도해 주세요.</li>
+            )}
             <li><b>게임이 끊겨요</b> — 토스앱을 완전히 종료한 후 재실행해 주세요.</li>
             <li><b>영혼석/유물이 사라졌어요</b> — 동일 토스 계정인지 확인해 주세요.</li>
           </ul>

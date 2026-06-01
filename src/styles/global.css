@@ -363,6 +363,14 @@ html[data-reduce-motion="true"] .particle-twinkle {
   animation-duration: 4s;
 }
 html[data-reduce-motion="true"] .screen-shake,
-html[data-reduce-motion="true"] .hp-danger-pulse {
+html[data-reduce-motion="true"] .hp-danger-pulse,
+html[data-reduce-motion="true"] .hub-cta-pulse,
+html[data-reduce-motion="true"] .stage-rec-pulse,
+html[data-reduce-motion="true"] .skill-highlight,
+html[data-reduce-motion="true"] .card-legendary,
+html[data-reduce-motion="true"] .card-epic,
+html[data-reduce-motion="true"] .spin-pulse,
+html[data-reduce-motion="true"] .ulti-ready-pulse,
+html[data-reduce-motion="true"] .retry-pulse {
   animation: none;
 }

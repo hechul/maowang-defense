@@ -361,11 +361,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const showDemonSpeech =
     !!snap.demonLine &&
     (snap.bossActive || snap.demonMood === 'urgent');
+  const onboardingAdvancedUnlocked =
+    (snap.runs ?? 0) >= 2 ||
+    (snap.stage ? snap.stage.index > 1 : true);
   const showAssistControls =
-    (snap.wave ?? 1) >= 3 ||
+    (onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3) ||
     snap.autoReveal ||
     snap.speed !== 1;
-  const showAdvancedCardTools = (snap.wave ?? 1) >= 3;
+  const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
@@ -529,7 +532,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {dangerVignette && <div style={styles.dangerVignette} />}
       {/* LD-3: 적 침투 임박 경고 (x<150 적이 있을 때) */}
-      {!dangerVignette && (snap.heroNearCastle ?? false) && (
+      {!dangerVignette && !gameplayChoiceOpen && !blockingDecisionOpen && (snap.heroNearCastle ?? false) && (
         <>
           <div style={styles.castleWarn} />
           <div style={styles.castleWarnLabel}>⚠ 적 침투 임박</div>
@@ -592,14 +595,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
       )}
 
-      {/* 스테이지 모드 — 진행도 라벨 (스테이지명 + W현재/총 + 카드풀 N) */}
+      {/* 스테이지 모드 — 진행도 라벨. 원본 캔버스 HUD와 겹치지 않도록 짧게 유지한다. */}
       {snap.stage && !snap.bossActive && !snap.cardChoices && !snap.slotActive && (
         <div style={styles.stageBadge}>
           {snap.stage.icon ? `${snap.stage.icon} ` : ''}
           {snap.stage.name} · W{snap.wave}/{snap.stage.waveLimit}
-          {typeof snap.deckSize === 'number' && (
-            <span style={styles.deckTag}>{' · 부하 '}{snap.deckSize}</span>
-          )}
         </div>
       )}
 
@@ -687,7 +687,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 웨이브 진행도 (보스 아닐 때만) */}
       {!snap.bossActive && snap.waveTotal > 0 && (
         <div style={styles.waveProgress}>
-          <span style={styles.waveProgressLabel}>적 등장</span>
+          <span style={styles.waveProgressLabel}>적</span>
           <div style={styles.waveProgressBar}>
             <div
               style={{
@@ -725,7 +725,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               {snap.slotActive
                 ? '봉인을 깨는 중...'
                 : snap.slotTripleReveal
-                  ? '✨ 같은 카드 3장 — 희귀 발견 ✨'
+                  ? '✨ 같은 카드 3장 — 한 장 선택하세요'
                   : monsterFull
                     ? `⚠ ${snap.aliveMonsters}/${monsterCap} — 처치 후 다시 펼치기`
                     : snap.autoReveal && snap.cardChoices
@@ -839,10 +839,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       <span style={{ ...styles.cardRarity, color: accent }}>
                         {role.icon} {role.label}
                       </span>
-                      <span style={styles.cardStar}>{'★'.repeat(def?.star || 1)}</span>
+                      {!isFirstCardReveal && (
+                        <span style={styles.cardStar}>{'★'.repeat(def?.star || 1)}</span>
+                      )}
                     </div>
                     {/* ACC A-2: 색맹 보조 — 등급명 텍스트 라벨 (rare 이상만 노출, 정보 과부하 방지) */}
-                    {(rarity === 'rare' || rarity === 'epic' || rarity === 'legendary') && (
+                    {!isFirstCardReveal && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary') && (
                       <div style={{ ...styles.rarityLabel, color: accent, borderColor: accent }}>
                         {rarity === 'legendary' ? '전설' : rarity === 'epic' ? '영웅' : '희귀'}
                       </div>
@@ -861,13 +863,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       </div>
                     )}
                     {/* QA H-5: 트레이드오프는 모든 런에서 표시 — legendary 페널티 사전 경고 */}
-                    {rarity === 'legendary' && (
+                    {!isFirstCardReveal && rarity === 'legendary' && (
                       <div style={styles.cardTradeoff}>⚠ 픽 시 마력 -50</div>
                     )}
-                    {def?.tags.includes('tank') && (
+                    {!isFirstCardReveal && def?.tags.includes('tank') && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 펼치기 할인</div>
                     )}
-                    {def?.tags.includes('magic') && rarity !== 'legendary' && (
+                    {!isFirstCardReveal && def?.tags.includes('magic') && rarity !== 'legendary' && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 마법 등장률 ↑</div>
                     )}
                     {evoImminent && (
@@ -1027,7 +1029,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           })()}
         </div>
 
-        {/* QA H-3: 컨트롤 row — Rally + AUTO + 속도 항상 노출 (☰ 메뉴 안에 숨겨두지 않음) */}
+        {/* 컨트롤 row — 초반에는 Rally만, AUTO/속도는 숙련 도구로 단계 노출 */}
         <div style={styles.controlRow}>
           <button
             style={{
@@ -1810,7 +1812,7 @@ const styles: Record<string, React.CSSProperties> = {
   bossHp: { position: 'absolute', left: 10, right: 10, top: 80, zIndex: 8 },
   bossLabel: { color: '#FD79A8', fontSize: 11, fontWeight: 'bold', textAlign: 'center', textShadow: '2px 2px 0 #000', letterSpacing: 2, marginBottom: 2 },
   missionHud: {
-    position: 'absolute', left: 8, top: 92, zIndex: 8,
+    position: 'absolute', left: 8, top: 106, zIndex: 8,
     pointerEvents: 'none',
     color: '#FFEAA7', fontSize: 9, fontWeight: 'bold',
     background: 'rgba(20,12,42,0.7)',
@@ -1821,7 +1823,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   missionHudProgress: { color: '#FDCB6E', fontSize: 9 },
   evoImminent: {
-    position: 'absolute', left: 8, top: 110, zIndex: 8,
+    position: 'absolute', left: 8, top: 124, zIndex: 8,
     pointerEvents: 'none',
     color: '#FDCB6E', fontSize: 9, fontWeight: 'bold',
     background: 'rgba(20,12,42,0.7)',
@@ -1867,7 +1869,7 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '1px 1px 0 #000',
   },
   stratumBadge: {
-    position: 'absolute', left: 8, right: 8, top: 50, zIndex: 7,
+    position: 'absolute', left: 74, right: 74, top: 64, zIndex: 7,
     pointerEvents: 'none',
     color: '#FDCB6E', fontSize: 9, fontWeight: 'bold',
     background: 'rgba(20,12,42,0.5)',
@@ -1878,21 +1880,19 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(253,203,110,0.4)',
   },
   stageBadge: {
-    position: 'absolute', left: 8, right: 8, top: 50, zIndex: 7,
+    position: 'absolute', left: 74, right: 74, top: 64, zIndex: 7,
     pointerEvents: 'none',
-    color: '#FFEAA7', fontSize: 10, fontWeight: 'bold',
+    color: '#FFEAA7', fontSize: 9, fontWeight: 'bold',
     background: 'linear-gradient(180deg,rgba(58,29,142,0.85),rgba(20,12,42,0.85))',
-    padding: '2px 8px',
+    padding: '2px 6px',
     textAlign: 'center',
     letterSpacing: 1,
     borderRadius: 8,
     border: '1px solid #a55eea',
     boxShadow: '0 0 6px rgba(165,94,234,0.45)',
   },
-  stageTags: { color: '#a55eea', fontWeight: 'normal', fontSize: 9 },
-  deckTag: { color: '#FD79A8', fontWeight: 'normal', fontSize: 9 },
   challengeBadge: {
-    position: 'absolute', left: 8, right: 8, top: 80, zIndex: 8,
+    position: 'absolute', left: 8, right: 8, top: 96, zIndex: 8,
     pointerEvents: 'none',
     color: '#FDCB6E', fontSize: 10, fontWeight: 'bold',
     background: 'rgba(123,45,142,0.5)',
@@ -1911,7 +1911,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   synergyCompact: {
     position: 'absolute',
-    left: 8, top: 'calc(115px + env(safe-area-inset-top, 0))',
+    left: 8, top: 'calc(128px + env(safe-area-inset-top, 0))',
     background: 'rgba(20,12,42,0.85)',
     border: '1px solid #a55eea', borderRadius: 12,
     color: '#FD79A8', fontSize: 10, fontWeight: 'bold',
@@ -1951,12 +1951,12 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 0 8px rgba(165,94,234,0.6)',
   },
   waveProgress: {
-    position: 'absolute', left: 8, right: 8, top: 65, zIndex: 8,
+    position: 'absolute', left: 8, right: 8, top: 82, zIndex: 8,
     display: 'flex', alignItems: 'center', gap: 6,
     pointerEvents: 'none',
   },
   waveProgressLabel: {
-    color: '#FDCB6E', fontSize: 9, fontWeight: 'bold', letterSpacing: 1.5,
+    color: '#FDCB6E', fontSize: 9, fontWeight: 'bold', letterSpacing: 1,
     textShadow: '1px 1px 0 #000',
   },
   waveProgressBar: {
@@ -1973,7 +1973,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   waveProgressCount: {
     color: '#fff', fontSize: 9, fontWeight: 'bold',
-    textShadow: '1px 1px 0 #000', minWidth: 76, textAlign: 'right',
+    textShadow: '1px 1px 0 #000', minWidth: 58, textAlign: 'right',
   },
   bossTelegraph: {
     position: 'absolute', left: 8, right: 8, top: 102, zIndex: 8,

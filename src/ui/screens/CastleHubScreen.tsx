@@ -3,6 +3,7 @@ import { useSaveStore } from '../../store/useSaveStore';
 import { recommendedNextStage } from '../../game/data/stages';
 import { SKILLS, skillCost } from '../../game/data/skilltree';
 import { progressInLevel } from '../../game/data/demonLevel';
+import { getRecruitById } from '../../game/data/recruits';
 import type { ScreenId } from '../../App';
 
 interface Props {
@@ -25,6 +26,17 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
   const nextStage = recommendedNextStage(clearedStages);
   const level = progressInLevel(demonExp).level;
+  const nextStageRewardText = nextStage ? (() => {
+    const unlockNames = (nextStage.firstClearReward.unlockRecruitIds ?? [])
+      .map((id) => getRecruitById(id)?.name ?? id);
+    if (unlockNames.length > 0) {
+      return `${nextStage.waveLimit}웨이브 방어 → ${unlockNames.join(' · ')} 모집 후보`;
+    }
+    if (nextStage.firstClearReward.unlockFeatureIds?.includes('endless')) {
+      return `${nextStage.waveLimit}웨이브 방어 → 심연 방어전 해금`;
+    }
+    return `${nextStage.waveLimit}웨이브 방어 → 영혼석 +${nextStage.firstClearReward.soulstones ?? 0}`;
+  })() : null;
 
   const upgradableSkills = useMemo(() => {
     let count = 0;
@@ -37,10 +49,6 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
     return count;
   }, [skills, stones, runs]);
 
-  const nextTitle = nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '심연 방어전';
-  const nextBody = nextStage
-    ? `웨이브 ${nextStage.waveLimit}까지 버티고 보스를 처치하세요.`
-    : '모든 스테이지를 넘겼습니다. 더 깊은 웨이브에 도전하세요.';
   const startPrimaryBattle = () => {
     if (nextStage && onStartStage) {
       onStartStage(nextStage.id);
@@ -86,16 +94,15 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         </div>
         <div style={styles.ctaSub}>
           {nextStage
-            ? `WAVE ${nextStage.waveLimit} 보스 처치 · 카드 3장 중 하나를 선택`
+            ? nextStageRewardText
             : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
         </div>
       </button>
 
-      <section style={styles.goalCard} aria-label="다음 목표">
-        <div style={styles.goalCopy}>
-          <div style={styles.goalLabel}>다음 목표</div>
-          <div style={styles.goalTitle}>{nextTitle}</div>
-          <div style={styles.goalText}>{nextBody}</div>
+      <section style={styles.mapStrip} aria-label="작전 지도">
+        <div style={styles.mapCopy}>
+          <div style={styles.mapLabel}>작전 지도</div>
+          <div style={styles.mapText}>열린 스테이지와 보상 확인</div>
         </div>
         <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>다른 스테이지</button>
       </section>
@@ -262,7 +269,7 @@ const styles: Record<string, React.CSSProperties> = {
   demonBubble: { flex: 1, minWidth: 0 },
   demonName: { fontSize: 9, color: '#FD79A8', letterSpacing: 1, marginBottom: 3 },
   demonText: { fontSize: 11, color: '#FFEAA7', lineHeight: 1.45, wordBreak: 'keep-all' },
-  coreLoop: { fontSize: 9, color: '#FDCB6E', marginTop: 5, lineHeight: 1.35 },
+  coreLoop: { fontSize: 10, color: '#FDCB6E', marginTop: 5, lineHeight: 1.35 },
   lvTag: { color: '#FDCB6E', fontSize: 9, marginLeft: 4, fontWeight: 'bold' },
   cta: {
     width: '100%',
@@ -281,7 +288,7 @@ const styles: Record<string, React.CSSProperties> = {
   ctaTop: { fontSize: 10, color: '#FDCB6E', letterSpacing: 2, marginBottom: 2 },
   ctaName: { fontSize: 18, fontWeight: 'bold', letterSpacing: 1, lineHeight: 1.35 },
   ctaSub: { fontSize: 9, color: '#FFEAA7', marginTop: 3, opacity: 0.9, lineHeight: 1.45 },
-  goalCard: {
+  mapStrip: {
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
@@ -294,10 +301,9 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
     boxShadow: '0 3px 0 rgba(0,0,0,0.35)',
   },
-  goalCopy: { minWidth: 0 },
-  goalLabel: { fontSize: 8, color: '#a55eea', letterSpacing: 2, fontWeight: 'bold' },
-  goalTitle: { fontSize: 13, color: '#FFEAA7', fontWeight: 'bold', marginTop: 3, lineHeight: 1.35 },
-  goalText: { fontSize: 9, color: '#c7bdd6', marginTop: 3, lineHeight: 1.45, wordBreak: 'keep-all' },
+  mapCopy: { minWidth: 0 },
+  mapLabel: { fontSize: 9, color: '#a55eea', letterSpacing: 2, fontWeight: 'bold' },
+  mapText: { fontSize: 9, color: '#c7bdd6', marginTop: 3, lineHeight: 1.45, wordBreak: 'keep-all' },
   mapBtn: {
     flexShrink: 0,
     background: 'rgba(123,45,142,0.68)',

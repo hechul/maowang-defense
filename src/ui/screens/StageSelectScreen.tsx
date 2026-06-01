@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSaveStore } from '../../store/useSaveStore';
 import { STAGES, isStageUnlocked, recommendedNextStage, type StageDefinition } from '../../game/data/stages';
-import { BOSSES } from '../../game/data/bosses';
 import { getRecruitById } from '../../game/data/recruits';
 import { StageStartModal } from '../components/StageStartModal';
 
 const CHAPTER_LABELS: Record<string, string> = {
   ch1: 'Ch1 — 봉인의 입구',
   ch2: 'Ch2 — 영원의 겨울',
+  ch3: 'Ch3 — 폭동의 변경',
+  ch4: 'Ch4 — 서리 왕국',
+  ch5: 'Ch5 — 심연의 법정',
+  ch6: 'Ch6 — 악몽의 회랑',
+  ch7: 'Ch7 — 종말의 문',
 };
 
 interface Props {
@@ -30,10 +34,24 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
     for (const s of STAGES) if (!seen.includes(s.chapterId)) seen.push(s.chapterId);
     return seen;
   }, []);
+  const visibleChapterIds = useMemo(() => {
+    const visible = chapterIds.filter((cid) => {
+      const chapterStages = STAGES.filter((s) => s.chapterId === cid);
+      return chapterStages.some((s) => cleared.includes(s.id) || isStageUnlocked(s.id, cleared));
+    });
+    return visible.length > 0 ? visible : chapterIds.slice(0, 1);
+  }, [chapterIds, cleared]);
   // 추천 스테이지가 속한 챕터를 기본 탭으로
   const [activeChapter, setActiveChapter] = useState<string>(
     recommended?.chapterId ?? chapterIds[0]
   );
+  useEffect(() => {
+    if (!visibleChapterIds.includes(activeChapter)) {
+      setActiveChapter(recommended?.chapterId && visibleChapterIds.includes(recommended.chapterId)
+        ? recommended.chapterId
+        : visibleChapterIds[0]);
+    }
+  }, [activeChapter, recommended, visibleChapterIds]);
   const stagesInChapter = STAGES.filter((s) => s.chapterId === activeChapter);
   const ch1Stages = STAGES.filter((s) => s.chapterId === 'ch1');
   const ch1AllCleared = ch1Stages.every((s) => cleared.includes(s.id));
@@ -61,22 +79,19 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
 
       {/* 챕터 탭 */}
       <div style={styles.chapterTabs}>
-        {chapterIds.map((cid) => {
+        {visibleChapterIds.map((cid) => {
           const ch1Done = cleared.filter((id) => STAGES.find((s) => s.id === id)?.chapterId === cid).length;
           const total = STAGES.filter((s) => s.chapterId === cid).length;
-          const ch2Locked = cid === 'ch2' && !cleared.includes('ch1_s5');
           return (
             <button
               key={cid}
               style={{
                 ...styles.chapterTab,
                 ...(activeChapter === cid ? styles.chapterTabActive : {}),
-                ...(ch2Locked ? styles.chapterTabLocked : {}),
               }}
-              onClick={() => !ch2Locked && setActiveChapter(cid)}
-              disabled={ch2Locked}
+              onClick={() => setActiveChapter(cid)}
             >
-              {ch2Locked ? '🔒 ' : ''}{CHAPTER_LABELS[cid] ?? cid}
+              {CHAPTER_LABELS[cid] ?? cid}
               <span style={styles.chapterCount}> {ch1Done}/{total}</span>
             </button>
           );
@@ -88,7 +103,6 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
           const unlocked = isStageUnlocked(stage.id, cleared);
           const isCleared = cleared.includes(stage.id);
           const stageStars = stars[stage.id] || 0;
-          const bossDef = stage.bossId ? BOSSES[stage.bossId] : undefined;
           return (
             <button
               key={stage.id}
@@ -123,33 +137,9 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
               <div style={styles.stageName}>{stage.name}</div>
               <div style={styles.stageSub}>{stage.subtitle}</div>
               {unlocked && (
-                <>
-                  <div style={styles.stageMeta}>
-                    웨이브 {stage.waveLimit} · 보스 {bossDef?.name ?? stage.bossId}
-                    {stage.recommendedTags && (
-                      <span style={styles.tagHint}> · 추천 {stage.recommendedTags.join('/')}</span>
-                    )}
-                  </div>
-                  {stage.stageModifier && (
-                    <div style={styles.modBadgeRow}>
-                      {stage.stageModifier.heroHpMul && stage.stageModifier.heroHpMul !== 1 && (
-                        <span style={styles.modBadge}>적 HP +{Math.round((stage.stageModifier.heroHpMul - 1) * 100)}%</span>
-                      )}
-                      {stage.stageModifier.heroAtkMul && stage.stageModifier.heroAtkMul !== 1 && (
-                        <span style={styles.modBadge}>적 ATK +{Math.round((stage.stageModifier.heroAtkMul - 1) * 100)}%</span>
-                      )}
-                      {stage.stageModifier.mpRegenMul && stage.stageModifier.mpRegenMul !== 1 && (
-                        <span style={styles.modBadge}>마력 회복 ×{stage.stageModifier.mpRegenMul.toFixed(2)}</span>
-                      )}
-                      {stage.stageModifier.castleHpMul && stage.stageModifier.castleHpMul !== 1 && (
-                        <span style={styles.modBadgeBuff}>마왕성 +{Math.round((stage.stageModifier.castleHpMul - 1) * 100)}%</span>
-                      )}
-                      {stage.stageModifier.rewardMul && stage.stageModifier.rewardMul !== 1 && (
-                        <span style={styles.modBadgeBuff}>보상 ×{stage.stageModifier.rewardMul.toFixed(2)}</span>
-                      )}
-                    </div>
-                  )}
-                </>
+                <div style={styles.stageMeta}>
+                  목표 {stage.waveLimit}웨이브 방어
+                </div>
               )}
               {!unlocked && stage.unlockCondition?.clearedStageId && (
                 <div style={styles.lockHint}>
@@ -181,7 +171,7 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
             </div>
             <div style={styles.chapterDoneBody}>
               Chapter 2도 도전 가능.<br/>
-              <b style={{ color: '#a55eea' }}>심연 방어전</b>에서 빌드 실험과 기록 갱신.
+              먼저 다음 침공을 막고, 심연은 이후에 열립니다.
             </div>
           </div>
         )}
@@ -199,14 +189,8 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
             <div style={styles.endlessSub}>
               끝없이 몰려오는 용사들을 막고 최고 기록을 세우세요.
             </div>
-            <div style={styles.endlessMeta}>빌드 실험 · 일일 미션 · 리더보드</div>
+            <div style={styles.endlessMeta}>기록 도전 · 빌드 실험</div>
           </button>
-        )}
-        {!endlessUnlocked && (
-          <div style={styles.endlessLocked}>
-            <div style={styles.endlessLockedTop}>🔒 심연 방어전</div>
-            <div style={styles.endlessLockedSub}>1-5 클리어 후 개방</div>
-          </div>
         )}
       </div>
       {showTut && (
@@ -287,9 +271,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFEAA7',
     boxShadow: '0 0 6px rgba(253,203,110,0.4)',
   },
-  chapterTabLocked: {
-    opacity: 0.5, cursor: 'not-allowed',
-  },
   chapterCount: { color: '#FDCB6E', fontSize: 9, marginLeft: 4, fontWeight: 'normal' },
   stageList: { display: 'flex', flexDirection: 'column', gap: 10 },
   stageCard: {
@@ -363,15 +344,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   endlessSub: { fontSize: 10, color: '#FFEAA7', marginBottom: 4, lineHeight: 1.4 },
   endlessMeta: { fontSize: 9, color: '#888' },
-  endlessLocked: {
-    width: '100%', marginTop: 8,
-    background: 'rgba(20,12,42,0.5)',
-    border: '1px dashed #4a3a6e', borderRadius: 8,
-    padding: '10px 14px', textAlign: 'left',
-    color: '#666',
-  },
-  endlessLockedTop: { fontSize: 12, fontWeight: 'bold', color: '#888' },
-  endlessLockedSub: { fontSize: 10, color: '#666', marginTop: 3 },
   stageTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
   stageIcon: { fontSize: 22 },
   stageIndex: {
@@ -380,10 +352,9 @@ const styles: Record<string, React.CSSProperties> = {
   starsRow: { color: '#FDCB6E', fontSize: 11, letterSpacing: 1 },
   stageName: { fontSize: 14, fontWeight: 'bold', color: '#FFEAA7', marginBottom: 2 },
   stageSub: { fontSize: 10, color: '#bbb', marginBottom: 4 },
-  stageMeta: { fontSize: 9, color: '#888' },
-  tagHint: { color: '#a55eea' },
+  stageMeta: { fontSize: 10, color: '#FDCB6E', marginTop: 2 },
   lockHint: { fontSize: 9, color: '#666', marginTop: 4, fontStyle: 'italic' },
-  firstReward: { fontSize: 9, color: '#FDCB6E', marginTop: 4 },
+  firstReward: { fontSize: 10, color: '#FFEAA7', marginTop: 5 },
   unlockHint: { color: '#FD79A8' },
   tutOverlay: {
     position: 'fixed', inset: 0, zIndex: 9000,
@@ -415,20 +386,5 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff', fontWeight: 'bold', fontSize: 12,
     cursor: 'pointer', fontFamily: 'inherit',
     letterSpacing: 1,
-  },
-  modBadgeRow: {
-    display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4,
-  },
-  modBadge: {
-    fontSize: 8, color: '#FF7675',
-    background: 'rgba(255,107,107,0.15)',
-    border: '1px solid rgba(255,107,107,0.4)',
-    borderRadius: 3, padding: '1px 4px',
-  },
-  modBadgeBuff: {
-    fontSize: 8, color: '#FDCB6E',
-    background: 'rgba(253,203,110,0.15)',
-    border: '1px solid rgba(253,203,110,0.4)',
-    borderRadius: 3, padding: '1px 4px',
   },
 };

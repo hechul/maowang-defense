@@ -489,7 +489,7 @@ export const useSaveStore = create<SaveState>()(
       currentStageId: null,
       selectedStageId: null,
       recruitedMonsterIds: ['slime', 'goblin', 'skel', 'zombie'],  // 스타터 4종
-      availableRecruitIds: ['imp', 'witch'],                         // 즉시 모집 가능 2종
+      availableRecruitIds: [],                                       // 스테이지 클리어 후 모집 후보 해금
       recruitSeenIds: [],
       recruitTutorialSeen: false,
       stageSelectTutorialSeen: false,
@@ -1563,7 +1563,7 @@ export const useSaveStore = create<SaveState>()(
     }),
     {
       name: 'maowang-save-v4',
-      version: 11,
+      version: 12,
       partialize: (s) => ({
         soulstones: s.soulstones, totalStones: s.totalStones, skills: s.skills,
         bestWave: s.bestWave, totalKills: s.totalKills, runs: s.runs, lastPlayedAt: s.lastPlayedAt,
@@ -1722,7 +1722,7 @@ export const useSaveStore = create<SaveState>()(
           ownedInteriors: arr(safe.ownedInteriors).length > 0 ? arr(safe.ownedInteriors) : ['sign_default', 'flag_default', 'aura_default', 'circle_default'],
           equippedInteriors: obj(safe.equippedInteriors, { sign: 'sign_default', flag: 'flag_default', aura: 'aura_default', magic_circle: 'circle_default' }),
           // ===== v5 → v6 migration: STAGE & RECRUIT =====
-          // 신규 유저: 스타터 4종 + 즉시 모집 가능 2종.
+          // 신규 유저: 스타터 4종. 초반 추가 부하는 ch1_s1/ch1_s2 클리어 보상으로 열린다.
           // 기존 v5 유저: 스타터 자동 부여 + 무한 모드 즉시 잠금 해제 + bestWave 기반 ch1 일부 자동 클리어 처리.
           clearedStages: (() => {
             const cur = arr(safe.clearedStages) as string[];
@@ -1753,10 +1753,25 @@ export const useSaveStore = create<SaveState>()(
           availableRecruitIds: (() => {
             const cur = arr(safe.availableRecruitIds) as string[];
             const recruited = arr(safe.recruitedMonsterIds) as string[];
-            const fallback = ['imp', 'witch'];
-            const merged = cur.slice();
-            for (const id of fallback) {
-              if (!merged.includes(id) && !recruited.includes(id)) merged.push(id);
+            const cleared = arr(safe.clearedStages) as string[];
+            const bestW = num(safe.bestWave, 0);
+            const stageCleared = new Set(cleared);
+            if (bestW >= 5) stageCleared.add('ch1_s1');
+            if (bestW >= 10) stageCleared.add('ch1_s2');
+            const earlyUnlocks: Array<[string, string]> = [
+              ['imp', 'ch1_s1'],
+              ['witch', 'ch1_s2'],
+            ];
+            const earlyIds = new Set(earlyUnlocks.map(([id]) => id));
+            const merged = cur.filter((id) => {
+              if (!earlyIds.has(id)) return true;
+              const stageId = earlyUnlocks.find(([earlyId]) => earlyId === id)?.[1];
+              return !!stageId && stageCleared.has(stageId);
+            });
+            for (const [id, stageId] of earlyUnlocks) {
+              if (stageCleared.has(stageId) && !merged.includes(id) && !recruited.includes(id)) {
+                merged.push(id);
+              }
             }
             return merged;
           })(),

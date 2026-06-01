@@ -13,7 +13,7 @@
  * 웨이브 내 spawn 간격(초). MVP는 초반 학습 공간을 위해 조금 느리게 시작한다.
  */
 export function calculateWaveSpawnInterval(wave: number): number {
-  return Math.max(0.9, 2.35 - wave * 0.05);
+  return Math.max(1.05, 2.65 - wave * 0.06);
 }
 
 /**
@@ -80,6 +80,29 @@ export function pickHeroForSpawn(input: HeroPickInput): string {
     if (validBoost.length > 0) pool = validBoost;
   }
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * 스테이지 전용 적 풀도 웨이브별 학습 순서를 지키도록 제한한다.
+ * heroPool을 그대로 쓰면 1웨이브부터 창병/마법사가 나와 FTUE와 경제가 흔들린다.
+ */
+export function stageHeroPoolForWave(stagePool: string[], wave: number): string[] {
+  const unlockWave: Record<string, number> = {
+    apprentice: 1,
+    swordsman: 2,
+    archer: 3,
+    spear: 3,
+    mage: 5,
+    rogue: 5,
+    shield: 6,
+    healer: 8,
+  };
+  const gated = stagePool.filter((id) => wave >= (unlockWave[id] ?? 1));
+  if (gated.length > 0) return gated;
+  const earliest = stagePool
+    .slice()
+    .sort((a, b) => (unlockWave[a] ?? 1) - (unlockWave[b] ?? 1))[0];
+  return [earliest ?? 'apprentice'];
 }
 
 /** 마일스톤 정의 — 챕터 클리어 + 중간 보상. GameEngine에서 import해 사용. */

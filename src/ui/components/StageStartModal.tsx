@@ -2,7 +2,7 @@
  * StageStartModal — 스테이지 도전 시작 확인 모달.
  *
  * 마왕성 톤 — 짧게, 결정 1개 (도전 시작 / 닫기).
- * 보상/모집 해금/추천 태그를 카드 형태로 보여준다.
+ * MVP에서는 목표와 보상을 한눈에 확인하고 바로 시작하게 만든다.
  */
 import { type StageDefinition } from '../../game/data/stages';
 import { getRecruitById } from '../../game/data/recruits';
@@ -19,6 +19,22 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
   const bossDef = stage.bossId ? BOSSES[stage.bossId] : undefined;
   const unlockIds = stage.firstClearReward.unlockRecruitIds ?? [];
   const featureIds = stage.firstClearReward.unlockFeatureIds ?? [];
+  const unlockNames = unlockIds.map((id) => getRecruitById(id)?.name ?? id);
+  const featureLabels = featureIds.map((id) => {
+    if (id === 'endless') return '심연 해금';
+    if (id === 'challenges') return '도전 해금';
+    return `${id} 해금`;
+  });
+  const rewardBits = alreadyCleared
+    ? [
+        `영혼석 +${stage.repeatReward.soulstones ?? 0}`,
+        stage.repeatReward.heroFragments ? '도감 조각' : '',
+      ].filter(Boolean)
+    : [
+        `영혼석 +${stage.firstClearReward.soulstones ?? 0}`,
+        ...unlockNames.map((name) => `${name} 해금`),
+        ...featureLabels,
+      ];
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -39,42 +55,10 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
           {bossDef && <span style={styles.meta}>· 보스 {bossDef.name}</span>}
         </div>
 
-        {stage.recommendedTags && stage.recommendedTags.length > 0 && (
-          <div style={styles.recRow}>
-            추천 {stage.recommendedTags.map((t) => `#${t}`).join(' ')}
-          </div>
-        )}
-
-        {/* 첫 클리어 보상 */}
-        {!alreadyCleared && (
-          <div style={styles.rewardCardFirst}>
-            <div style={styles.rewardTop}>🎉 첫 클리어 보상</div>
-            <div style={styles.rewardLine}>💎 영혼석 +{stage.firstClearReward.soulstones ?? 0}</div>
-            {unlockIds.length > 0 && (
-              <div style={styles.rewardLine}>
-                👹 모집 해금: {unlockIds.map((id) => getRecruitById(id)?.name ?? id).join(', ')}
-              </div>
-            )}
-            {featureIds.includes('endless') && (
-              <div style={styles.rewardLine}>🌌 심연 방어전 해금</div>
-            )}
-            {featureIds.includes('challenges') && (
-              <div style={styles.rewardLine}>⚔ 도전 모드 해금</div>
-            )}
-          </div>
-        )}
-        {alreadyCleared && (
-          <div style={styles.rewardCardRepeat}>
-            <div style={styles.rewardTop}>🔁 반복 도전 보상</div>
-            <div style={styles.rewardLine}>💎 영혼석 +{stage.repeatReward.soulstones ?? 0}</div>
-            {stage.repeatReward.heroFragments && (
-              <div style={styles.rewardLine}>
-                📖 도감 조각: {Object.entries(stage.repeatReward.heroFragments)
-                  .map(([id, n]) => `${id} ×${n}`).join(', ')}
-              </div>
-            )}
-          </div>
-        )}
+        <div style={styles.rewardStrip}>
+          <span style={styles.rewardLabel}>{alreadyCleared ? '반복 보상' : '첫 클리어'}</span>
+          <span style={styles.rewardText}>{rewardBits.join(' · ')}</span>
+        </div>
 
         {/* stageModifier 경고 — 0 이상 차이 시만 */}
         {stage.stageModifier && (() => {
@@ -88,7 +72,7 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
           if (lines.length === 0) return null;
           return (
             <div style={styles.modCard}>
-              <div style={styles.modTop}>⚠ 스테이지 보정</div>
+              <span style={styles.modTop}>보정</span>
               <div style={styles.modBody}>{lines.join(' · ')}</div>
             </div>
           );
@@ -123,29 +107,29 @@ const styles: Record<string, React.CSSProperties> = {
   clearedTag: { fontSize: 9, color: '#FDCB6E', fontWeight: 'bold' },
   title: { fontSize: 16, fontWeight: 'bold', color: '#FFEAA7', marginBottom: 2 },
   subtitle: { fontSize: 10, color: '#FD79A8', marginBottom: 6, fontStyle: 'italic' },
-  desc: { fontSize: 10, color: '#bbb', marginBottom: 8, lineHeight: 1.5 },
+  desc: { fontSize: 11, color: '#c7bdd6', marginBottom: 8, lineHeight: 1.5 },
   metaRow: { fontSize: 10, color: '#888', marginBottom: 4 },
   meta: { marginRight: 4 },
-  recRow: { fontSize: 9, color: '#a55eea', marginBottom: 8 },
-  rewardCardFirst: {
+  rewardStrip: {
+    display: 'flex', gap: 6, alignItems: 'center',
     background: 'rgba(253,203,110,0.1)',
-    border: '1.5px solid #FDCB6E', borderRadius: 6,
-    padding: '8px 10px', marginBottom: 8,
+    border: '1px solid rgba(253,203,110,0.55)', borderRadius: 5,
+    padding: '7px 8px', marginBottom: 8,
   },
-  rewardCardRepeat: {
-    background: 'rgba(74,58,110,0.4)',
-    border: '1px solid #4a3a6e', borderRadius: 6,
-    padding: '8px 10px', marginBottom: 8,
+  rewardLabel: {
+    flexShrink: 0,
+    fontSize: 9, color: '#1a0828', fontWeight: 'bold',
+    background: '#FDCB6E', borderRadius: 3, padding: '2px 5px',
   },
-  rewardTop: { fontSize: 10, color: '#FDCB6E', fontWeight: 'bold', marginBottom: 4, letterSpacing: 1 },
-  rewardLine: { fontSize: 11, color: '#FFEAA7', lineHeight: 1.6 },
+  rewardText: { fontSize: 11, color: '#FFEAA7', lineHeight: 1.35 },
   modCard: {
+    display: 'flex', gap: 6, alignItems: 'center',
     background: 'rgba(255,107,107,0.1)',
     border: '1px solid rgba(255,107,107,0.4)', borderRadius: 4,
     padding: '5px 8px', marginBottom: 8,
   },
-  modTop: { fontSize: 9, color: '#FF7675', fontWeight: 'bold', marginBottom: 2 },
-  modBody: { fontSize: 9, color: '#FFEAA7' },
+  modTop: { fontSize: 9, color: '#FF7675', fontWeight: 'bold' },
+  modBody: { fontSize: 10, color: '#FFEAA7' },
   btnStart: {
     width: '100%', padding: '11px',
     background: 'radial-gradient(ellipse at 50% 30%, #FF7675 0%, #D63031 50%, #7a1818 100%)',

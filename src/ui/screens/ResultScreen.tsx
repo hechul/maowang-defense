@@ -337,9 +337,10 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
   const isFirstClear = !!stats.firstClear;
   const showDemonComment = showMetaFlavor || (stageCleared && isFirstClear);
   const showRunPattern = showMetaFlavor
-    || stageCleared
-    || stats.wave >= 5
-    || (stats.dominantBuildProgress ?? 0) >= 0.75;
+    || (!stageCleared && (
+      stats.wave >= 5 ||
+      (stats.dominantBuildProgress ?? 0) >= 0.75
+    ));
   const titleText = isStageMode
     ? (stageCleared ? '🏰 침공 방어 성공!' : '⚔ 성문이 뚫렸다')
     : isChallengeMode
@@ -414,29 +415,31 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           획득 영혼석 <span style={styles.stonesNum}>+{stats.soulstones}</span>
         </div>
         {/* P0-1 마왕 EXP — 적립량 + 진행도 + 보상 클레임 */}
-        <div style={demonExpStyles.box}>
-          <div style={demonExpStyles.head}>
-            <span style={demonExpStyles.lvLabel}>마왕 LV.{lvProg.level}</span>
-            <span style={demonExpStyles.expGain}>EXP +{lastRunExp}</span>
+        {(showMetaFlavor || pendingDemonRewards.length > 0) && (
+          <div style={demonExpStyles.box}>
+            <div style={demonExpStyles.head}>
+              <span style={demonExpStyles.lvLabel}>마왕 LV.{lvProg.level}</span>
+              <span style={demonExpStyles.expGain}>EXP +{lastRunExp}</span>
+            </div>
+            <div style={demonExpStyles.bar}>
+              <div style={{
+                ...demonExpStyles.fill,
+                width: lvProg.isMax ? '100%' : `${(lvProg.expInLevel / lvProg.expForNext) * 100}%`,
+              }} />
+            </div>
+            {pendingDemonRewards.length > 0 && (
+              <button
+                style={demonExpStyles.claimBtn}
+                onClick={() => {
+                  const r = claimPendingDemonRewards();
+                  alert(`마왕 레벨 보상 수령\n${r.labels.join('\n')}${r.stones ? `\n총 영혼석 +${r.stones}` : ''}${r.recruitsAdded.length ? `\n해금: ${r.recruitsAdded.join(', ')}` : ''}`);
+                }}
+              >
+                🎁 레벨업 보상 수령 ({pendingDemonRewards.length})
+              </button>
+            )}
           </div>
-          <div style={demonExpStyles.bar}>
-            <div style={{
-              ...demonExpStyles.fill,
-              width: lvProg.isMax ? '100%' : `${(lvProg.expInLevel / lvProg.expForNext) * 100}%`,
-            }} />
-          </div>
-          {pendingDemonRewards.length > 0 && (
-            <button
-              style={demonExpStyles.claimBtn}
-              onClick={() => {
-                const r = claimPendingDemonRewards();
-                alert(`마왕 레벨 보상 수령\n${r.labels.join('\n')}${r.stones ? `\n총 영혼석 +${r.stones}` : ''}${r.recruitsAdded.length ? `\n해금: ${r.recruitsAdded.join(', ')}` : ''}`);
-              }}
-            >
-              🎁 레벨업 보상 수령 ({pendingDemonRewards.length})
-            </button>
-          )}
-        </div>
+        )}
         {/* W4 마왕 echo + W3 NPC 사망 누적 반응 + W4 일일 라인 */}
         {showMetaFlavor && echoLineRef.current && (
           <div style={echoStyles.echoBox}>
@@ -475,11 +478,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
         {ENABLE_MONETIZATION && !adFreeFirstSessions && (
           <ResultAdOptions />
         )}
-        {!ENABLE_MONETIZATION ? (
-          <div style={styles.adFreeNotice}>
-            MVP 테스트 — 광고/과금 비활성화
-          </div>
-        ) : adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && adFreeFirstSessions && (
           <div style={styles.adFreeNotice}>
             ✨ 신규 환영 — 첫 3런까지 광고 없음
           </div>
@@ -611,7 +610,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       })()}
 
       {/* ★ 추천 강화 카드 — 사망 원인에 따라 컨텍스트 변경 (강조판) */}
-      {recommendedUpgrade && (
+      {recommendedUpgrade && !stageCleared && (
         <div style={styles.recCard}>
           <div style={styles.recTop}>
             💡 추천 강화 — {SKILL_REASON[recommendedUpgrade.id] || '다음 런 보강'}
@@ -625,7 +624,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* 영혼석 부족 시 다음 목표 표시 */}
-      {!recommendedUpgrade && upcomingUpgrade && (
+      {!recommendedUpgrade && upcomingUpgrade && !stageCleared && (
         <div style={styles.recCardLocked}>
           <div style={styles.recTop}>🎯 다음 목표</div>
           <div style={styles.recMain}>

@@ -67,7 +67,7 @@ import {
 } from './systems/CardSystem';
 import {
   calculateWaveSpawnInterval, calculateLiveHeroCap, isBossWave,
-  shouldSpawnElite, calculateClearStars, pickHeroForSpawn, getMilestoneForWave,
+  shouldSpawnElite, calculateClearStars, pickHeroForSpawn, stageHeroPoolForWave, getMilestoneForWave,
 } from './systems/WaveSystem';
 import { computeSoulstoneReward } from './systems/EconomySystem';
 import {
@@ -93,7 +93,7 @@ import {
 const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
-const MONSTER_FRONT_X = W - 120;
+const MONSTER_FRONT_X = W - 130;
 const MONSTER_BACK_X = 70;
 const HERO_CASTLE_X = 80;
 const HERO_MAX_X = W + 24;
@@ -1057,7 +1057,7 @@ export class GameEngine {
             '⚠ 마왕성 위급',
             ENABLE_MONETIZATION
               ? 'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\nHP 0이 되면 광고 보고 부활할 수 있어요.'
-              : 'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\nMVP 테스트에서는 부활 광고가 꺼져 있어요.',
+              : 'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\n지금은 부활 의식이 봉인되어 있어요.',
             '⚠',
           );
         }
@@ -1145,7 +1145,7 @@ export class GameEngine {
       ? Math.max(3, stageWaveTotal)
       : baseWaveTotal;
     this.waveCleared = false;
-    this.waveTimer = 1.0;
+    this.waveTimer = this.wave === 1 ? 2.0 : 1.0;
     this.bossSpawned = false;
     this.bossActive = false;
     // tide: 웨이브 시작 시 마력 +50
@@ -1212,7 +1212,7 @@ export class GameEngine {
           // WaveSystem: 풀 + 층 boost 반영해 hero 1체 결정
           // 스테이지 모드에서 heroPool이 정의되어 있으면 우선 사용 (단계 보정)
           const stagePool = (this.runMode === 'stage' && this.runStageDef && this.runStageDef.heroPool.length > 0)
-            ? this.runStageDef.heroPool
+            ? stageHeroPoolForWave(this.runStageDef.heroPool, this.wave)
             : null;
           const t = pickHeroForSpawn({
             basePool: stagePool ?? heroPoolForWave(this.wave),
@@ -1284,7 +1284,7 @@ export class GameEngine {
         this.bonusWaveUsed = false;
       }
       if (this.bonusWaveActive) this.bonusWaveUsed = true;
-      this.addMP(25);
+      this.addMP(20);
       // E-1: 매 웨이브 클리어 시 영혼석 +5 보너스
       this.queueBonusStones(5);
       // WaveSystem: 클리어 별점
@@ -1366,9 +1366,9 @@ export class GameEngine {
         }
         void towerHpMul; void towerRewardMul; void nextMilestone;  // 사용 보장
       }
-      // OVERHAUL §3.2: 5wave마다 분기 카드 강제 등장 (clearedWave가 5의 배수, 보스 처치 후)
-      // 단 clearedWave=5는 첫 보스라 다음 wave에 분기, clearedWave % 5 == 0 && clearedWave > 0
-      if (clearedWave % 5 === 0 && clearedWave > 0 && clearedWave <= 25) {
+      const userRunsForIntermissions = useSaveStore.getState().runs;
+      // OVERHAUL §3.2: 5wave마다 분기 카드 등장. MVP 초반 2런은 전투 흐름을 먼저 익히게 숨긴다.
+      if (userRunsForIntermissions >= 3 && clearedWave % 5 === 0 && clearedWave > 0 && clearedWave <= 25) {
         // 분기 카드 3종 중 1개 선택 모달
         const all = [
           pickRandomBranchCard(),
@@ -1408,12 +1408,10 @@ export class GameEngine {
       }
       // 결정 단계 활성화 — runs >= 3 + 영혼석 30 이상일 때만 (첫 런 좌절 방지)
       // 매 5웨이브 단위 (wave 6/11/16...)
-      // QA M-3: 첫 보스(W5) 처치 직후 W6에서는 조건 무시하고 1회 강제 노출 (스킵 가능)
       const userStones = useSaveStore.getState().soulstones;
-      const userRuns = useSaveStore.getState().runs;
-      const firstBossBreak = this.wave === 6 && !this._waveBreakShown;
+      const userRuns = userRunsForIntermissions;
       const regularBreak = this.wave >= 6 && this.wave % 5 === 1 && userRuns >= 3 && userStones >= 30;
-      if (firstBossBreak || regularBreak) {
+      if (regularBreak) {
         // 단계 3: requestOpen — 더 높은 overlay 활성 시 큐 적재
         requestOpen(
           this.getOverlayFlags(),
@@ -2334,11 +2332,11 @@ export class GameEngine {
       // 보너스 웨이브 ×2 / echo 유물: 콤보 5+ 시 ×2 (스택)
       let mpReward = this.bonusWaveActive ? u.mpReward * 2 : u.mpReward;
       if (this.relics.has('echo') && this.combo >= 5) mpReward *= 2;
-      // CL-1: Rally 활성 중 처치 = 마력 +10 추가 (능동 행동 보상)
+      // CL-1: Rally 활성 중 처치 = 마력 +5 추가 (능동 행동 보상)
       if (this.rallyActiveT > 0) {
-        mpReward += 10;
+        mpReward += 5;
         this.rallyBonusKills++;
-        this.spawnDamageText(u.x, u.y - 36, '⚡+10 마력', '#FDCB6E', false, true);
+        this.spawnDamageText(u.x, u.y - 36, '⚡+5 마력', '#FDCB6E', false, true);
       }
       // 빌드 체감 — 마법 시너지 활성 + 마법 태그 처치 시 마력 +2 + 룬 입자
       // (마법 빌드 = mpGen + 마력 경제 차별화)
@@ -2394,13 +2392,13 @@ export class GameEngine {
         const tone = this.combo >= 50 ? '#FF7675' : this.combo >= 20 ? '#FDCB6E' : '#FFEAA7';
         let subText = '연쇄 처치';
 
-        // 5콤보 — 마력 +20 즉시
+        // 5콤보 — 마력 +10 즉시
         if (this.combo === 5) {
-          this.addMP(20);
-          subText = '마력 +20!';
+          this.addMP(10);
+          subText = '마력 +10!';
           if (!useSaveStore.getState().hasTutorialSeen('tut_combo5')) {
             useSaveStore.getState().markTutorialSeen('tut_combo5');
-            this.showBanner('🔥 5 COMBO!', '마력 +20 / 빠르게 처치하면 콤보 유지', '#FDCB6E', 1.2);
+            this.showBanner('🔥 5 COMBO!', '마력 +10 / 빠르게 처치하면 콤보 유지', '#FDCB6E', 1.2);
           }
         }
         // 10콤보 — 모든 적 0.5초 freeze
@@ -2866,7 +2864,7 @@ export class GameEngine {
     const surge = this.relics.has('surge') ? 3 : 1;
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
     const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
-    const natural = 2.4 * surge * mpRegenMul * this.stageMod.mpRegenMul;
+    const natural = 2.0 * surge * mpRegenMul * this.stageMod.mpRegenMul;
     const relicAdd = this.fusedEffectAdd('mpRegenAdd');
     const secretAdd = this._secretsAggregate.mpRegenAdd;
     const synergyAdd = this._hiddenMpRegenAdd;
@@ -3320,8 +3318,10 @@ export class GameEngine {
     this.shakeFx(4);
     Audio.ui_confirm();
     Ait.haptic('medium');
-    // 항상 짧은 발동 배너 (첫 사용은 더 길게 + 튜토리얼)
-    this.showBanner('⚡ 돌격!', `몬스터 ${count}체 가속 1.5초`, '#FDCB6E', 0.8);
+    // MVP: 중앙 배너는 첫 몇 번만. 이후에는 파티클/버튼 반응으로 충분히 알린다.
+    if (this.rallyUsedCount <= 2) {
+      this.showBanner('⚡ 돌격!', `몬스터 ${count}체 가속 1.5초`, '#FDCB6E', 0.8);
+    }
     if (this.rallyUsedCount === 1) {
       // TUT-1: 첫 Rally 사용 시 학습 모달
       this.queueTutorial(
@@ -3410,7 +3410,14 @@ export class GameEngine {
     });
     if (!r.ok) {
       if (r.reason === 'unknownMonster') this.cardChoices = null;
-      if (r.reason === 'fieldFull') Audio.ui_error();
+      if (r.reason === 'fieldFull') {
+        Audio.ui_error();
+        this.showBanner('전열 포화', '이번 카드는 흘려보내고 전투를 이어갑니다.', '#FDCB6E', 0.9);
+        this.cardChoices = null;
+        this.rerollAvailable = false;
+        this.riskCardSlot = null;
+        if (this.paused && this.canResumeFrom('cardChoice')) this.paused = false;
+      }
       return;
     }
     const t = r.pickedMonsterId!;

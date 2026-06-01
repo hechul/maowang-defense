@@ -88,14 +88,15 @@ export const RECRUITS: RecruitDefinition[] = [
     order: 4,
   },
 
-  // ===== 즉시 모집 가능 (영혼석만 있으면) =====
+  // ===== 초반 스테이지 클리어 후 모집 가능 =====
   {
     monsterId: 'imp', name: '임프', title: '저편의 작은 악마',
     description: '저편에서 건너온 작은 악마. 마법의 불씨를 다룬다.',
     roleLabel: '화염', rarity: 'rare', tags: ['fire', 'magic', 'demon'],
     // 첫 모집 비용 — 1-1 첫 클리어 보상(200)으로 100 잔여 가능 (온보딩 밸런스)
     cost: { soulstones: 100 },
-    unlockHint: '즉시 모집 가능',
+    unlockHint: '첫 침입 클리어',
+    unlockStageId: 'ch1_s1',
     recommendedForBuilds: ['flame_rampage', 'magic_school'],
     order: 5,
   },
@@ -104,7 +105,8 @@ export const RECRUITS: RecruitDefinition[] = [
     description: '잊혀진 마녀. 마력의 흐름을 가속시킨다.',
     roleLabel: '마법', rarity: 'rare', tags: ['magic'],
     cost: { soulstones: 300 },
-    unlockHint: '즉시 모집 가능',
+    unlockHint: '잊혀진 묘지 클리어',
+    unlockStageId: 'ch1_s2',
     recommendedForBuilds: ['magic_school'],
     order: 6,
   },

@@ -73,9 +73,9 @@ export interface CardCostInput {
 /** 카드 펼치기 1회 비용. GameEngine.currentCardCost()에서 호출. */
 export function calculateCardCost(input: CardCostInput): number {
   let c = input.baseCost;
-  if (input.cardCount < 2) c *= 0.55;
+  if (input.cardCount < 2) c *= 0.65;
   if (input.cardCount >= 3) {
-    c *= 1 + Math.min(0.7, (input.cardCount - 2) * 0.08);
+    c *= 1 + Math.min(0.8, (input.cardCount - 2) * 0.1);
   }
   if (input.hasPactRelic) c *= 0.7;
   c *= 1 - input.costSkillLevel * 0.05;
@@ -155,7 +155,7 @@ export interface CreateChoicesInput {
   recruitedPool?: string[] | null;
   /** 이번 런 내 태그별 누적 픽 카운트 — 3회 이상이면 50% 확률로 1슬롯 강제 교체 */
   tagPickCount: Record<string, number>;
-  /** 현재 wave — 5 이상에서만 리스크 카드 트리거 */
+  /** 현재 wave — 특수 카드 연출/리스크 카드의 초반 노출을 늦추는 기준 */
   wave: number;
 }
 
@@ -206,20 +206,24 @@ export function createCardChoices(input: CreateChoicesInput): CreateChoicesResul
     }
   }
 
-  // 같은 카드 3장 4% 확률
+  // 같은 카드 3장 4% 확률 — 초반 학습 구간에서는 일반 3택지만 보여준다.
   let tripleReveal = false;
-  if (Math.random() < 0.04) {
+  if (input.wave >= 4 && Math.random() < 0.04) {
     const t = results[0];
     results[1] = t;
     results[2] = t;
     tripleReveal = true;
   }
 
-  // 리스크 카드 — wave>=5 + 15% 확률 + tripleReveal 아닐 때 1슬롯 교체
+  // 리스크 카드 — MVP 초반에는 고성능 후반 카드를 우회 지급하지 않도록 늦게 연다.
   let riskCardSlot: { idx: number; def: RiskCardDef } | null = null;
-  if (!tripleReveal && input.wave >= 5 && Math.random() < 0.15) {
+  if (!tripleReveal && input.wave >= 10 && Math.random() < 0.10) {
+    const eligibleRiskCards = input.wave < 15
+      ? RISK_CARDS.filter((def) => (MONSTERS[def.rewardMonsterId]?.star ?? 1) <= 2)
+      : RISK_CARDS;
+    if (eligibleRiskCards.length === 0) return { results, tripleReveal, riskCardSlot, lockApplied };
     const slot = Math.floor(Math.random() * 3);
-    const riskDef = RISK_CARDS[Math.floor(Math.random() * RISK_CARDS.length)];
+    const riskDef = eligibleRiskCards[Math.floor(Math.random() * eligibleRiskCards.length)];
     results[slot] = riskDef.rewardMonsterId;
     riskCardSlot = { idx: slot, def: riskDef };
   }

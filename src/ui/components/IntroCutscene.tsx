@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * 인트로 컷씬 (W1 리워크 — 8패널, 약 14초, skip 가능)
- * 세계관: 1대 마왕 봉인 → 천 년 후 → 예언 → 인간 왕의 결정 → 깨어남 → 손을 들다.
+ * 인트로 컷씬 — MVP에서는 첫 플레이까지의 시간을 짧게 유지한다.
+ * 세계관: 1대 마왕 봉인 → 인간 왕의 선제 공격 → 깨어남 → 카드 디펜스.
  *
  * 데이터: src/game/data/lore.ts (LORE_SHORT) 와 톤 정합.
  */
@@ -12,56 +12,28 @@ const FRAMES: { text: string; sub?: string; bg: string; icon: string; dur: numbe
     sub: '1대 마왕 〈므렐〉이\n일곱 빛의 사도에게 봉인되었다.',
     bg: 'radial-gradient(circle, #1a0c30 0%, #000 80%)',
     icon: '🌑',
-    dur: 1800,
-  },
-  {
-    text: '인간의 천 년',
-    sub: '마왕성은 신전이 되었다.\n사제들은 무엇을 감시하는지 잊었다.',
-    bg: 'radial-gradient(circle, #3a2d5c 0%, #05030f 70%)',
-    icon: '⛪',
-    dur: 1800,
-  },
-  {
-    text: '— 예언 —',
-    sub: '"세 번째 달이 차면\n어둠이 한 사람의 몸으로 돌아온다."',
-    bg: 'radial-gradient(circle, #FDCB6E 0%, #05030f 80%)',
-    icon: '🌙',
-    dur: 1900,
+    dur: 1500,
   },
   {
     text: '인간 왕의 결정',
-    sub: '"깨어나기 전에 죽인다."',
+    sub: '"깨어나기 전에 죽인다."\n횃불 아래 인간 군대가 진군한다.',
     bg: 'radial-gradient(circle, #D63031 0%, #05030f 70%)',
     icon: '👑',
-    dur: 1700,
+    dur: 1600,
   },
   {
-    text: '그날 밤',
+    text: '그날 밤, 깨어났다',
     sub: '당신은 자신이 누구인지\n모르는 채 마왕성에서 깨어났다.',
     bg: 'radial-gradient(circle, #2D1B4E 0%, #05030f 70%)',
     icon: '🦇',
-    dur: 1900,
-  },
-  {
-    text: '강철 발소리',
-    sub: '횃불 아래\n인간 군대가 진군해온다.',
-    bg: 'radial-gradient(circle, #3a0d0d 0%, #05030f 70%)',
-    icon: '⚔',
-    dur: 1700,
-  },
-  {
-    text: '당신은 손을 들었다',
-    sub: '어둠이 모여들었다.\n그것이 시작이었다.',
-    bg: 'radial-gradient(circle, #7B2D8E 0%, #05030f 70%)',
-    icon: '🖤',
-    dur: 1900,
+    dur: 1600,
   },
   {
     text: '운명의 카드를 펼쳐라',
-    sub: '— 마왕 디펜스 —',
+    sub: '몬스터를 소환해\n마왕성을 지켜라.',
     bg: 'radial-gradient(circle, #FD79A8 0%, #1a0c30 70%)',
     icon: '🎴',
-    dur: 1600,
+    dur: 1500,
   },
 ];
 
@@ -103,7 +75,7 @@ export function IntroCutscene({ onDone }: { onDone: () => void }) {
         <h1 style={styles.text}>{frame.text}</h1>
         {frame.sub && <div style={styles.sub}>{frame.sub}</div>}
       </div>
-      <div style={styles.skipHint}>탭하여 건너뛰기 →</div>
+      <div style={styles.skipHint}>탭하면 바로 시작 →</div>
       <div style={styles.progress}>
         {FRAMES.map((_, i) => (
           <div

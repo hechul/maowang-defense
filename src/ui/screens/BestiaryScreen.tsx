@@ -21,6 +21,21 @@ import { DEMON_SECRETS } from '../../game/data/demonSecrets';
 
 type Tab = 'monsters' | 'heroes' | 'bosses' | 'relics' | 'fusions' | 'hidden' | 'secrets' | 'guide' | 'lore';
 
+const CORE_TABS: Tab[] = ['monsters', 'heroes', 'bosses', 'relics', 'guide'];
+const ADVANCED_TABS: Tab[] = ['fusions', 'hidden', 'secrets', 'lore'];
+
+const TAB_LABELS: Record<Tab, string> = {
+  monsters: '몬스터',
+  heroes: '용사',
+  bosses: '보스',
+  relics: '유물',
+  guide: '가이드',
+  fusions: '진화',
+  hidden: '비밀',
+  secrets: '능력',
+  lore: '세계관',
+};
+
 const BUILD_GUIDES = [
   {
     id: 'slime',
@@ -50,6 +65,7 @@ const BUILD_GUIDES = [
 
 export function BestiaryScreen({ onBack, onGoRecruit }: { onBack: () => void; onGoRecruit?: () => void }) {
   const [tab, setTab] = useState<Tab>('monsters');
+  const [showAdvancedTabs, setShowAdvancedTabs] = useState(false);
   const [detail, setDetail] = useState<{ id: string; def: any; tab: Tab } | null>(null);
   const [buildDetail, setBuildDetail] = useState<typeof BUILDS[number] | null>(null);
   const discMonsters = useSaveStore((s) => s.discoveredMonsters);
@@ -83,21 +99,33 @@ export function BestiaryScreen({ onBack, onGoRecruit }: { onBack: () => void; on
 
   const total = Object.keys(data.entries).length;
   const found = Object.keys(data.entries).filter((id) => data.disc.has(id)).length;
+  const visibleTabs = showAdvancedTabs ? [...CORE_TABS, ...ADVANCED_TABS] : CORE_TABS;
 
   return (
     <div style={styles.root}>
       <h2 style={styles.title}>도 감</h2>
       <div style={styles.tabs}>
-        {(['monsters', 'heroes', 'bosses', 'relics', 'fusions', 'hidden', 'secrets', 'guide', 'lore'] as Tab[]).map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }}
             onClick={() => { setTab(t); Audio.ui_navigate(); }}
           >
-            {t === 'monsters' ? '몬스터' : t === 'heroes' ? '용사' : t === 'bosses' ? '보스' : t === 'relics' ? '유물' : t === 'fusions' ? '진화' : t === 'hidden' ? '비밀' : t === 'secrets' ? '능력' : t === 'guide' ? '가이드' : '세계관'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
+      <button
+        style={styles.advancedToggle}
+        onClick={() => {
+          const next = !showAdvancedTabs;
+          setShowAdvancedTabs(next);
+          if (!next && ADVANCED_TABS.includes(tab)) setTab('monsters');
+          Audio.ui_navigate();
+        }}
+      >
+        {showAdvancedTabs ? '상세 기록 접기' : '상세 기록 보기'}
+      </button>
       {tab !== 'guide' && tab !== 'lore' && tab !== 'fusions' && tab !== 'hidden' && tab !== 'secrets' && (
         <div style={styles.progress}>
           발견 {found} / {total}
@@ -730,9 +758,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '18px 12px', background: 'rgba(5,3,15,0.96)',
   },
   title: { color: '#FFEAA7', fontSize: 22, letterSpacing: 3, textAlign: 'center', textShadow: '2px 2px 0 #000', margin: '8px 0 4px' },
-  tabs: { display: 'flex', gap: 4, width: '100%', margin: '8px 0' },
+  tabs: { display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%', margin: '8px 0 6px' },
   tab: {
-    flex: 1, padding: 7, fontSize: 11, letterSpacing: 2,
+    flex: '1 1 calc(20% - 4px)', padding: 7, fontSize: 10, letterSpacing: 1,
     background: 'rgba(20,12,42,0.8)', border: '1px solid #4a3a6e',
     color: '#bbb', cursor: 'pointer', borderRadius: 4,
     fontWeight: 'bold', fontFamily: 'inherit',
@@ -740,6 +768,19 @@ const styles: Record<string, React.CSSProperties> = {
   tabActive: {
     background: 'linear-gradient(180deg,#7B2D8E,#3a0d4e)',
     borderColor: '#FDCB6E', color: '#fff',
+  },
+  advancedToggle: {
+    alignSelf: 'center',
+    marginBottom: 8,
+    padding: '5px 10px',
+    background: 'rgba(20,12,42,0.72)',
+    border: '1px dashed #4a3a6e',
+    borderRadius: 4,
+    color: '#a55eea',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
   },
   progress: {
     width: '100%', padding: '5px 12px', fontSize: 11, color: '#FFEAA7',
