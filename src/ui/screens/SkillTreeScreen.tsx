@@ -20,7 +20,11 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     const m = window.location.hash.match(/skill=(\w+)/);
     if (m) {
-      setHighlightId(m[1]);
+      const nextId = m[1] as SkillId;
+      setHighlightId(nextId);
+      if (SKILLS[nextId] && !CORE_SKILLS.includes(nextId)) {
+        setShowAdvanced(true);
+      }
       window.location.hash = '';
       // 5초 후 강조 해제
       const t = setTimeout(() => setHighlightId(null), 5000);
@@ -132,7 +136,7 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
         </div>
       )}
       <div style={styles.bottom}>
-        <button style={styles.btn} onClick={handleReset}>초기화</button>
+        {showAdvanced && <button style={styles.btn} onClick={handleReset}>초기화</button>}
         <button style={{ ...styles.btn, ...styles.btnPrimary }} onClick={onBack}>돌아가기</button>
       </div>
       <style>{`

@@ -14,6 +14,13 @@
 
 const cache = new Map<string, HTMLCanvasElement>();
 const loading = new Map<string, Promise<HTMLCanvasElement>>();
+const READBACK_CONTEXT: CanvasRenderingContext2DSettings = { willReadFrequently: true };
+
+function ctx2d(canvas: HTMLCanvasElement, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D {
+  const cx = canvas.getContext('2d', settings);
+  if (!cx) throw new Error('2D canvas context를 만들 수 없습니다.');
+  return cx;
+}
 
 /** PNG 경로 (Vite의 public/ 기반) */
 function spritePath(id: string): string {
@@ -36,7 +43,7 @@ export function loadSprite(id: string, scale = 2): Promise<HTMLCanvasElement> {
       const c = document.createElement('canvas');
       c.width = img.width * scale;
       c.height = img.height * scale;
-      const cx = c.getContext('2d')!;
+      const cx = ctx2d(c);
       cx.imageSmoothingEnabled = false;
       cx.drawImage(img, 0, 0, c.width, c.height);
       cache.set(key, c);
@@ -117,7 +124,7 @@ const sheetLoading = new Map<string, Promise<HTMLCanvasElement[]>>();
 
 /** 알파 16 이상 픽셀의 bbox로 잘라내기 (transparent padding 제거) */
 function autoTrim(src: HTMLCanvasElement): HTMLCanvasElement {
-  const cx = src.getContext('2d')!;
+  const cx = ctx2d(src, READBACK_CONTEXT);
   const w = src.width, h = src.height;
   const data = cx.getImageData(0, 0, w, h).data;
   let minX = w, minY = h, maxX = -1, maxY = -1;
@@ -137,7 +144,7 @@ function autoTrim(src: HTMLCanvasElement): HTMLCanvasElement {
   const out = document.createElement('canvas');
   out.width = tw;
   out.height = th;
-  const ocx = out.getContext('2d')!;
+  const ocx = ctx2d(out);
   ocx.imageSmoothingEnabled = false;
   ocx.drawImage(src, minX, minY, tw, th, 0, 0, tw, th);
   return out;
@@ -153,7 +160,7 @@ function autoTrim(src: HTMLCanvasElement): HTMLCanvasElement {
  * - 다크 아웃라인(명도 낮음 또는 채도 있음)은 BG 점수 0 → 무조건 보존
  */
 function removeBackgroundFlood(canvas: HTMLCanvasElement) {
-  const cx = canvas.getContext('2d')!;
+  const cx = ctx2d(canvas, READBACK_CONTEXT);
   const W = canvas.width, H = canvas.height;
   const im = cx.getImageData(0, 0, W, H);
   const data = im.data;
@@ -256,7 +263,7 @@ export function loadSpriteSheet(
         const c = document.createElement('canvas');
         c.width = frameW;
         c.height = frameH;
-        const cx = c.getContext('2d')!;
+        const cx = ctx2d(c, READBACK_CONTEXT);
         cx.imageSmoothingEnabled = false;
         cx.drawImage(img, i * frameW, 0, frameW, frameH, 0, 0, frameW, frameH);
         removeBackgroundFlood(c);
@@ -266,7 +273,7 @@ export function loadSpriteSheet(
       // 2단계: 각 프레임 개별 bbox 추출 (캐릭터의 진짜 영역)
       type Bbox = { minX: number; minY: number; maxX: number; maxY: number };
       const bboxes: Bbox[] = raw.map((r) => {
-        const d = r.getContext('2d')!.getImageData(0, 0, frameW, frameH).data;
+        const d = ctx2d(r, READBACK_CONTEXT).getImageData(0, 0, frameW, frameH).data;
         let minX = frameW, minY = frameH, maxX = -1, maxY = -1;
         for (let y = 0; y < frameH; y++) {
           for (let x = 0; x < frameW; x++) {
@@ -300,7 +307,7 @@ export function loadSpriteSheet(
         const out = document.createElement('canvas');
         out.width = maxW;
         out.height = maxH;
-        const ocx = out.getContext('2d')!;
+        const ocx = ctx2d(out);
         ocx.imageSmoothingEnabled = false;
         if (b.maxX < 0) return out;
         const w = b.maxX - b.minX + 1;
@@ -316,7 +323,7 @@ export function loadSpriteSheet(
         const c = document.createElement('canvas');
         c.width = t.width * scale;
         c.height = t.height * scale;
-        const cx = c.getContext('2d')!;
+        const cx = ctx2d(c);
         cx.imageSmoothingEnabled = false;
         cx.drawImage(t, 0, 0, c.width, c.height);
         return c;
@@ -388,7 +395,7 @@ export function loadSpriteGrid(
           const c = document.createElement('canvas');
           c.width = cellW;
           c.height = cellH;
-          const cx = c.getContext('2d')!;
+          const cx = ctx2d(c, READBACK_CONTEXT);
           cx.imageSmoothingEnabled = false;
           cx.drawImage(img, f * cellW, r * cellH, cellW, cellH, 0, 0, cellW, cellH);
           removeBackgroundFlood(c);
@@ -397,7 +404,7 @@ export function loadSpriteGrid(
         // 2) 각 프레임 개별 bbox
         type Bbox = { minX: number; minY: number; maxX: number; maxY: number };
         const bboxes: Bbox[] = raw.map((rc) => {
-          const d = rc.getContext('2d')!.getImageData(0, 0, cellW, cellH).data;
+          const d = ctx2d(rc, READBACK_CONTEXT).getImageData(0, 0, cellW, cellH).data;
           let minX = cellW, minY = cellH, maxX = -1, maxY = -1;
           for (let y = 0; y < cellH; y++) {
             for (let x = 0; x < cellW; x++) {
@@ -428,7 +435,7 @@ export function loadSpriteGrid(
           const out = document.createElement('canvas');
           out.width = maxW;
           out.height = maxH;
-          const ocx = out.getContext('2d')!;
+          const ocx = ctx2d(out);
           ocx.imageSmoothingEnabled = false;
           if (b.maxX < 0) return out;
           const w = b.maxX - b.minX + 1;

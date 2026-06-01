@@ -93,7 +93,7 @@ import {
 const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
-const MONSTER_FRONT_X = W - 130;
+const MONSTER_FRONT_X = W - 60;
 const MONSTER_BACK_X = 70;
 const HERO_CASTLE_X = 80;
 const HERO_MAX_X = W + 24;
@@ -267,6 +267,8 @@ export interface GameOverStats {
   cleared?: boolean;
   /** 이번 클리어가 해당 스테이지 첫 클리어였는지 — 보상/잠금 해제 표시용 */
   firstClear?: boolean;
+  /** 이번 결과에서 실제로 새로 열린 모집 후보만 — 중복 보상 CTA 방지 */
+  newRecruitUnlockIds?: string[];
   /** 클리어 별점 (1~3) — 스테이지 모드일 때만 의미 있음 */
   stars?: 1 | 2 | 3;
   /** 챌린지 첫 클리어 여부 (이번 런에서 처음 W15 도달) */
@@ -479,6 +481,7 @@ export class GameEngine {
     mpRegenMul: 1,
     castleHpMul: 1,
     rewardMul: 1,
+    waveTotalMul: 1,
   };
   /** snapshot versioning — UI rerender 최적화. HUD/overlay 핵심 필드 변화 시에만 +1 */
   private _snapVersion = 0;
@@ -801,6 +804,7 @@ export class GameEngine {
         mpRegenMul: m.mpRegenMul ?? 1,
         castleHpMul: m.castleHpMul ?? 1,
         rewardMul: m.rewardMul ?? 1,
+        waveTotalMul: m.waveTotalMul ?? 1,
       };
     }
     // castleHpMul: 마왕성 시작 HP 곱셈 (시작 직후 한 번만)
@@ -1142,7 +1146,7 @@ export class GameEngine {
     const baseWaveTotal = Math.floor(3 + this.wave * 1.5);
     const stageWaveTotal = Math.floor(2 + this.wave * 1.15 + Math.max(0, this.wave - 4) * 0.55);
     this.waveTotal = this.runMode === 'stage'
-      ? Math.max(3, stageWaveTotal)
+      ? Math.max(2, Math.floor(stageWaveTotal * this.stageMod.waveTotalMul))
       : baseWaveTotal;
     this.waveCleared = false;
     this.waveTimer = this.wave === 1 ? 2.0 : 1.0;
@@ -3143,6 +3147,12 @@ export class GameEngine {
   private queueTutorial(id: string, title: string, body: string, icon?: string) {
     const seen = useSaveStore.getState().hasTutorialSeen(id);
     if (seen) return;
+    if (id.startsWith('tut_enemy_') || id === 'tut_boss_phase2') {
+      useSaveStore.getState().markTutorialSeen(id);
+      const oneLine = body.split('\n').find((line) => line.trim().length > 0) ?? '전투 중 대응하세요.';
+      this.showBanner(title, oneLine.replace(/^💡\s*/, ''), icon === '💥' || icon === '⚠' ? '#FF6B6B' : '#FDCB6E', 1.2);
+      return;
+    }
     if (this.tutorialQueue.find((t) => t.id === id)) return;
     this.tutorialQueue.push({ id, title, body, icon });
     this.paused = true;
@@ -3323,13 +3333,8 @@ export class GameEngine {
       this.showBanner('⚡ 돌격!', `몬스터 ${count}체 가속 1.5초`, '#FDCB6E', 0.8);
     }
     if (this.rallyUsedCount === 1) {
-      // TUT-1: 첫 Rally 사용 시 학습 모달
-      this.queueTutorial(
-        'tut_rally',
-        '⚡ 돌격!',
-        '몬스터가 1.5초 동안 가속 + 공격력 ↑.\n쿨다운 2초.\n\n적이 마왕성에 가까울 때 사용하세요.',
-        '⚡',
-      );
+      // MVP: 첫 돌격은 전투를 멈추는 튜토리얼 대신 짧은 배너/이펙트로만 학습한다.
+      useSaveStore.getState().markTutorialSeen('tut_rally');
     }
     return true;
   }
@@ -5008,6 +5013,13 @@ export class GameEngine {
     const wasFirstClear = this.stageCleared
       && this.runStageId
       && !useSaveStore.getState().clearedStages.includes(this.runStageId);
+    const currentSave = useSaveStore.getState();
+    const stageUnlockIds = wasFirstClear && this.runStageDef
+      ? (this.runStageDef.firstClearReward.unlockRecruitIds ?? [])
+      : [];
+    const newRecruitUnlockIds = stageUnlockIds.filter((id) =>
+      !currentSave.recruitedMonsterIds.includes(id)
+      && !currentSave.availableRecruitIds.includes(id));
     const stats: GameOverStats = {
       // 단계 6: 모드/스테이지/클리어 페이로드
       mode: this.runMode,
@@ -5015,6 +5027,7 @@ export class GameEngine {
       stageId: this.runStageId,
       cleared: this.stageCleared,
       firstClear: !!wasFirstClear,
+      newRecruitUnlockIds,
       stars: stageStars,
       // 챌린지 클리어 라벨 (W15 통과 시 캡처)
       challengeFirstClear: this._challengeFirstClearLabeled,
@@ -5199,12 +5212,20 @@ export class GameEngine {
   }
 
   // 외부에서 호출 (UI 버튼)
+  setUserPause(active: boolean) {
+    this.overlayQueue.userPauseActive = active;
+    if (active) {
+      this.paused = true;
+      return;
+    }
+    if (this.canResumeFrom('pause')) this.paused = false;
+    this.tryFlushOverlayQueue();
+  }
+
   togglePause() {
-    this.paused = !this.paused;
-    // 단계 2: 사용자 pause 명시 추적 (overlay-induced paused와 구분)
-    this.overlayQueue.userPauseActive = this.paused;
-    // 사용자가 pause 해제 시 큐에 deferred overlay 있으면 자동 활성화
-    if (!this.paused) this.tryFlushOverlayQueue();
+    // paused는 카드 선택/튜토리얼 같은 시스템 정지에도 켜지므로
+    // 사용자 pause 여부만 기준으로 토글해야 메뉴 상태가 뒤틀리지 않는다.
+    this.setUserPause(!this.overlayQueue.userPauseActive);
   }
 
   /** ★ 큐에 쌓인 deferred overlay 1개 활성화 시도 (없으면 noop) */

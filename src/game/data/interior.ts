@@ -31,12 +31,15 @@ export const INTERIORS: InteriorDef[] = [
   { id: 'flag_default',  category: 'flag', icon: '🚩', name: '검은 깃발',     desc: '기본', cost: 0, visual: { color: '#1A1A2E' } },
   { id: 'flag_purple',   category: 'flag', icon: '🟣', name: '자줏빛 깃발',   desc: '시작 마력 +10', cost: 500, bonus: { startMpBonus: 10 }, visual: { color: '#7B2D8E' } },
   { id: 'flag_phoenix',  category: 'flag', icon: '🔥', name: '불사조 깃발',   desc: '시작 마력 +25', cost: 2000, bonus: { startMpBonus: 25 }, visual: { color: '#E88840' } },
+  { id: 'flag_blackpurple', category: 'flag', icon: '🏴', name: '흑자색 깃발', desc: '시즌 보상 / 시작 마력 +20', cost: 3500, bonus: { startMpBonus: 20 }, visual: { color: '#4A2068' } },
 
   // 오라 (aura)
   { id: 'aura_default',  category: 'aura', icon: '🌫', name: '기본 오라',     desc: '기본', cost: 0, visual: { color: '#a55eea' } },
   { id: 'aura_crimson',  category: 'aura', icon: '🩸', name: '핏빛 오라',     desc: '마왕성 HP +2%', cost: 600, bonus: { castleHpRatio: 1.02 }, visual: { color: '#D63031' } },
   { id: 'aura_amber',    category: 'aura', icon: '🌟', name: '호박 오라',     desc: '마왕성 HP +5%', cost: 1500, bonus: { castleHpRatio: 1.05 }, visual: { color: '#F5A623' } },
   { id: 'aura_void',     category: 'aura', icon: '🌌', name: '심연 오라',     desc: '마왕성 HP +10%', cost: 4000, bonus: { castleHpRatio: 1.10 }, visual: { color: '#0a3a2a' } },
+  { id: 'demon_crowned', category: 'aura', icon: '👑', name: '왕관의 오라',   desc: '시즌 외형 보상 / 마왕성 HP +8%', cost: 6000, bonus: { castleHpRatio: 1.08 }, visual: { color: '#FDCB6E' } },
+  { id: 'demon_lord',    category: 'aura', icon: '🦇', name: '진왕의 오라',   desc: '최종 시즌 외형 보상 / 마왕성 HP +12%', cost: 9000, bonus: { castleHpRatio: 1.12 }, visual: { color: '#7B2D8E' } },
 
   // 마법진 (magic_circle)
   { id: 'circle_default', category: 'magic_circle', icon: '⭕', name: '기본 마법진', desc: '기본', cost: 0, visual: { pattern: 'default' } },

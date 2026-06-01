@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ScreenId } from '../../App';
 import type { GameOverStats } from '../../game/GameEngine';
 import { useSaveStore } from '../../store/useSaveStore';
@@ -135,6 +135,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
   const echoLineRef = useRef<string>('');
   const npcReactionRef = useRef<{ npc: typeof NPCS[number]; line: string } | null>(null);
   const deathStreakChapterRef = useRef<{ chapterId: string; streak: number } | null>(null);
+  const [showResultDetails, setShowResultDetails] = useState(false);
 
   // P0-1/P0-2/P1-5: 결과 화면 진입 시 한 번 — buildBonus/discovery exp 추가 + 챌린지 별점 + 시즌 XP
   useEffect(() => {
@@ -341,6 +342,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       stats.wave >= 5 ||
       (stats.dominantBuildProgress ?? 0) >= 0.75
     ));
+  const showDetailedResultBlocks = showMetaFlavor && showResultDetails;
   const titleText = isStageMode
     ? (stageCleared ? '🏰 침공 방어 성공!' : '⚔ 성문이 뚫렸다')
     : isChallengeMode
@@ -415,7 +417,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           획득 영혼석 <span style={styles.stonesNum}>+{stats.soulstones}</span>
         </div>
         {/* P0-1 마왕 EXP — 적립량 + 진행도 + 보상 클레임 */}
-        {(showMetaFlavor || pendingDemonRewards.length > 0) && (
+        {(showDetailedResultBlocks || pendingDemonRewards.length > 0) && (
           <div style={demonExpStyles.box}>
             <div style={demonExpStyles.head}>
               <span style={demonExpStyles.lvLabel}>마왕 LV.{lvProg.level}</span>
@@ -441,19 +443,19 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           </div>
         )}
         {/* W4 마왕 echo + W3 NPC 사망 누적 반응 + W4 일일 라인 */}
-        {showMetaFlavor && echoLineRef.current && (
+        {showDetailedResultBlocks && echoLineRef.current && (
           <div style={echoStyles.echoBox}>
             <div style={echoStyles.echoLabel}>— 마왕 —</div>
             <div style={echoStyles.echoBody}>{echoLineRef.current}</div>
           </div>
         )}
-        {showMetaFlavor && dailyHint && (
+        {showDetailedResultBlocks && dailyHint && (
           <div style={echoStyles.dailyBox}>
             <span style={echoStyles.dailyIcon}>🌅</span>
             <span style={echoStyles.dailyText}>{dailyHint}</span>
           </div>
         )}
-        {showMetaFlavor && npcReactionRef.current && (
+        {showDetailedResultBlocks && npcReactionRef.current && (
           <div style={{ ...echoStyles.npcBox, borderColor: npcReactionRef.current.npc.accent }}>
             <div style={echoStyles.npcHead}>
               <span style={echoStyles.npcIcon}>{npcReactionRef.current.npc.icon}</span>
@@ -469,24 +471,33 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
             <div style={echoStyles.npcBody}>{npcReactionRef.current.line}</div>
           </div>
         )}
-        {ENABLE_MONETIZATION && !adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && showDetailedResultBlocks && !adFreeFirstSessions && (
           <button style={styles.adBtn} onClick={handleAdDouble}>
             🎬 광고 보고 영혼석 ×2
           </button>
         )}
         {/* v11 추가 광고 옵션 — 일일 보너스 / 시즌 XP / 마왕 EXP / 우편 추가 */}
-        {ENABLE_MONETIZATION && !adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && showDetailedResultBlocks && !adFreeFirstSessions && (
           <ResultAdOptions />
         )}
-        {ENABLE_MONETIZATION && adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && showDetailedResultBlocks && adFreeFirstSessions && (
           <div style={styles.adFreeNotice}>
             ✨ 신규 환영 — 첫 3런까지 광고 없음
           </div>
         )}
       </div>
 
+      {showMetaFlavor && (
+        <button
+          style={styles.resultDetailsToggle}
+          onClick={() => setShowResultDetails((v) => !v)}
+        >
+          {showResultDetails ? '전투 상세 접기' : '전투 상세 보기'}
+        </button>
+      )}
+
       {/* 사망 원인 추정 — stage clear에서는 숨김 (정보 다이어트), fail/endless에선 유지 */}
-      {!isNewRecord && !stageCleared && (
+      {!isNewRecord && !stageCleared && (!showMetaFlavor || showResultDetails) && (
         <div style={styles.causeCard}>
           <div style={styles.causeTop}>📉 무너진 지점</div>
           <div style={styles.causeReason}>{death.reason}</div>
@@ -517,7 +528,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
 
       {/* 스테이지 클리어 보상 카드 — 첫 클리어 vs 반복 분기 */}
       {stageCleared && stageDef && (() => {
-        const unlockIds = stageDef.firstClearReward.unlockRecruitIds ?? [];
+        const unlockIds = stats.newRecruitUnlockIds ?? [];
         const featureIds = stageDef.firstClearReward.unlockFeatureIds ?? [];
         return (
           <div style={isFirstClear ? styles.stageRewardFirst : styles.stageRewardRepeat}>
@@ -532,7 +543,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
                   : (stageDef.repeatReward.soulstones ?? 0)}
               </span>
             </div>
-            {/* 모집 해금 강조 — 첫 클리어 + 해금 ID 있을 때만 */}
+            {/* 모집 해금 강조 — 이번 결과에서 실제 새로 열린 후보만 */}
             {isFirstClear && unlockIds.length > 0 && (
               <div style={styles.recruitUnlockBox}>
                 <div style={styles.recruitUnlockTop}>👹 새 부하가 성문 앞에서 대기 중!</div>
@@ -570,7 +581,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       })()}
 
       {/* dominant build가 없을 때만 — 가장 많이 픽한 태그 fallback (짧은 런에서도 픽 경향 노출) */}
-      {showRunPattern && !stats.dominantBuildId && stats.topPickedTag && (
+      {showDetailedResultBlocks && showRunPattern && !stats.dominantBuildId && stats.topPickedTag && (
         <div style={styles.tagFallback}>
           <span style={styles.tagFallbackTop}>📊 이번 런 픽 경향</span>
           <span style={styles.tagFallbackName}>
@@ -580,7 +591,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* OVERHAUL §3.3: 빌드 컨셉 진행도 */}
-      {showRunPattern && stats.dominantBuildId && (() => {
+      {showDetailedResultBlocks && showRunPattern && stats.dominantBuildId && (() => {
         const build = BUILDS.find((b) => b.id === stats.dominantBuildId);
         if (!build) return null;
         const progress = stats.dominantBuildProgress ?? 0;
@@ -610,7 +621,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       })()}
 
       {/* ★ 추천 강화 카드 — 사망 원인에 따라 컨텍스트 변경 (강조판) */}
-      {recommendedUpgrade && !stageCleared && (
+      {recommendedUpgrade && !stageCleared && (!showMetaFlavor || showResultDetails) && (
         <div style={styles.recCard}>
           <div style={styles.recTop}>
             💡 추천 강화 — {SKILL_REASON[recommendedUpgrade.id] || '다음 런 보강'}
@@ -624,7 +635,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* 영혼석 부족 시 다음 목표 표시 */}
-      {!recommendedUpgrade && upcomingUpgrade && !stageCleared && (
+      {!recommendedUpgrade && upcomingUpgrade && !stageCleared && (!showMetaFlavor || showResultDetails) && (
         <div style={styles.recCardLocked}>
           <div style={styles.recTop}>🎯 다음 목표</div>
           <div style={styles.recMain}>
@@ -636,7 +647,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* 6런 진입 보호 종료 안내 */}
-      {showMetaFlavor && runs === 5 && (
+      {showDetailedResultBlocks && runs === 5 && (
         <div style={styles.recCardLocked}>
           <div style={styles.recTop}>🎓 신규 보호 종료</div>
           <div style={styles.recMain}>
@@ -653,7 +664,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
         const nextDef = nextId ? getStageById(nextId) : null;
         const nextUnlocked = nextDef && isStageUnlocked(nextDef.id, [...cleared, stats.stageId!]);
         const hasRecruitUnlock = isFirstClear
-          && (stageDef?.firstClearReward.unlockRecruitIds?.length ?? 0) > 0;
+          && (stats.newRecruitUnlockIds?.length ?? 0) > 0;
         // CTA 우선순위:
         //  1) 모집 해금 있으면 [새 부하 모집하기] 강조
         //  2) 모집 해금 없으면 [다음 침공 막기] 강조
@@ -997,6 +1008,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #26de81', borderRadius: 5,
     color: '#26de81', fontSize: 10, textAlign: 'center',
     fontWeight: 'bold', letterSpacing: 1,
+  },
+  resultDetailsToggle: {
+    width: '100%', maxWidth: 280,
+    padding: '7px 12px', marginTop: -6, marginBottom: 10,
+    background: 'rgba(20,12,42,0.45)',
+    border: '1px dashed #4a3a6e', borderRadius: 6,
+    color: '#bbb', fontSize: 10, fontWeight: 'bold',
+    fontFamily: 'inherit', cursor: 'pointer',
   },
   btnRetry: {
     width: '100%', maxWidth: 280,

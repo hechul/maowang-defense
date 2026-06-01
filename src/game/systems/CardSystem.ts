@@ -74,8 +74,9 @@ export interface CardCostInput {
 export function calculateCardCost(input: CardCostInput): number {
   let c = input.baseCost;
   if (input.cardCount < 2) c *= 0.65;
-  if (input.cardCount >= 3) {
-    c *= 1 + Math.min(0.8, (input.cardCount - 2) * 0.1);
+  else if (input.cardCount === 2) c *= 0.9;
+  else if (input.cardCount >= 3) {
+    c *= 1 + Math.min(0.7, (input.cardCount - 3) * 0.08);
   }
   if (input.hasPactRelic) c *= 0.7;
   c *= 1 - input.costSkillLevel * 0.05;

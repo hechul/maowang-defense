@@ -150,10 +150,10 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
       <style>{`
         @keyframes hubCtaPulse {
-          0%,100% { box-shadow: 0 4px 0 #4a0a0a, 0 0 14px rgba(253,121,168,0.55); transform: translateY(0); }
-          50%     { box-shadow: 0 4px 0 #4a0a0a, 0 0 24px rgba(253,121,168,0.9); transform: translateY(-1px); }
+          0%,100% { box-shadow: 0 4px 0 #4a0a0a, 0 0 12px rgba(253,121,168,0.45); }
+          50%     { box-shadow: 0 4px 0 #4a0a0a, 0 0 20px rgba(253,121,168,0.75); }
         }
-        .hub-cta-pulse { animation: hubCtaPulse 1.7s ease-in-out infinite; }
+        .hub-cta-pulse { animation: hubCtaPulse 2.2s ease-in-out infinite; }
       `}</style>
     </div>
   );

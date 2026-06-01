@@ -206,6 +206,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     if (!canvasRef.current) return;
     const eng = new GameEngine(canvasRef.current);
     engineRef.current = eng;
+    if (import.meta.env.DEV) {
+      (window as any).__maowangEngine = eng;
+    }
     eng.on('gameover', (stats: GameOverStats) => {
       const st = useSaveStore.getState();
       // P0-4: 일일 모드면 시드 점수 기록
@@ -296,6 +299,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       clearInterval(polling);
       eng.dispose();
       engineRef.current = null;
+      if (import.meta.env.DEV && (window as any).__maowangEngine === eng) {
+        delete (window as any).__maowangEngine;
+      }
     };
   }, []);  // 빈 deps — 한 번만 mount
 
@@ -371,12 +377,78 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
+  const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
   const waveBreakAffordable = {
     heal: stones >= waveBreakCosts.heal,
     mpRefill: stones >= waveBreakCosts.mpRefill,
     freespin: stones >= waveBreakCosts.freespin,
   };
+  const [waveBreakDetailsOpen, setWaveBreakDetailsOpen] = useState(false);
+  const waveBreakRecommendedKey: 'heal' | 'mpRefill' | 'freespin' =
+    hpRatio < 0.5 && !waveBreakUsed.heal
+      ? 'heal'
+      : snap.mp < snap.cardCost && !waveBreakUsed.mpRefill
+        ? 'mpRefill'
+        : 'freespin';
+  const waveBreakActions = {
+    heal: {
+      icon: '❤',
+      name: '마왕성 +30% HP',
+      tip: !waveBreakAffordable.heal && !waveBreakUsed.heal ? '영혼석 부족' : 'HP가 낮을 때 가장 안전',
+      used: waveBreakUsed.heal,
+      affordable: waveBreakAffordable.heal,
+      recommended: hpRatio < 0.5 && waveBreakAffordable.heal && !waveBreakUsed.heal,
+      cost: waveBreakCosts.heal,
+      onClick: () => eng()?.waveBreakHeal(),
+    },
+    mpRefill: {
+      icon: '⚡',
+      name: '마력 풀충전',
+      tip: !waveBreakAffordable.mpRefill && !waveBreakUsed.mpRefill ? '영혼석 부족' : '카드 비용이 부족할 때 추천',
+      used: waveBreakUsed.mpRefill,
+      affordable: waveBreakAffordable.mpRefill,
+      recommended: snap.mp < snap.cardCost && waveBreakAffordable.mpRefill && !waveBreakUsed.mpRefill,
+      cost: waveBreakCosts.mpRefill,
+      onClick: () => eng()?.waveBreakMpRefill(),
+    },
+    freespin: {
+      icon: '🎴',
+      name: '무료 카드 준비',
+      tip: waveBreakAffordable.freespin ? '다음 웨이브 전 빌드 보강' : '영혼석 부족',
+      used: waveBreakUsed.freespin,
+      affordable: waveBreakAffordable.freespin,
+      recommended: waveBreakRecommendedKey === 'freespin' && waveBreakAffordable.freespin && !waveBreakUsed.freespin,
+      cost: waveBreakCosts.freespin,
+      onClick: () => eng()?.waveBreakFreeSpin(),
+    },
+  };
+  const renderWaveBreakAction = (key: 'heal' | 'mpRefill' | 'freespin') => {
+    const action = waveBreakActions[key];
+    return (
+      <button
+        key={key}
+        style={{
+          ...styles.wbAction,
+          ...(action.used || !action.affordable ? styles.wbActionUsed : {}),
+          ...(action.recommended ? styles.wbActionRecommend : {}),
+        }}
+        onClick={action.onClick}
+        disabled={action.used || !action.affordable}
+      >
+        <div style={styles.wbIcon}>{action.icon}</div>
+        <div style={styles.wbBody}>
+          <div style={styles.wbName}>{action.name}</div>
+          <div style={styles.wbTip}>{action.recommended ? '추천' : action.tip}</div>
+        </div>
+        <div style={styles.wbCost}>💎 {action.cost}</div>
+      </button>
+    );
+  };
+
+  useEffect(() => {
+    if (!snap.waveBreakActive) setWaveBreakDetailsOpen(false);
+  }, [snap.waveBreakActive]);
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
@@ -404,9 +476,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         (snap.tutorialQueue && snap.tutorialQueue.length > 0);
       if (e.key === 'Escape') {
         if (showQuitConfirm) { setShowQuitConfirm(false); e.preventDefault(); return; }
-        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); if (snap.paused) eng()?.togglePause(); e.preventDefault(); return; }
+        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); eng()?.setUserPause(false); e.preventDefault(); return; }
         if (modalActive) return;
-        if (!snap.paused) eng()?.togglePause();
+        eng()?.setUserPause(true);
         pauseMenuRequestedRef.current = true;
         setShowPauseMenu(true);
         e.preventDefault();
@@ -535,10 +607,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {!dangerVignette && !gameplayChoiceOpen && !blockingDecisionOpen && (snap.heroNearCastle ?? false) && (
         <>
           <div style={styles.castleWarn} />
-          <div style={styles.castleWarnLabel}>⚠ 적 침투 임박</div>
           {/* QA M-4: 마력 부족 + 적 침투 시 ⚡돌격 추천 컨텍스트 힌트 */}
           {snap.mp < snap.cardCost && snap.rallyReady && !snap.cardChoices && !snap.slotActive && (
-            <div style={styles.contextHint}>💡 ⚡ 돌격으로 시간 벌기</div>
+            <div style={styles.contextHint}>⚡ 돌격 추천</div>
           )}
         </>
       )}
@@ -558,7 +629,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             style={{ ...styles.pauseBtn, opacity: modalActive ? 0.4 : 1 }}
             onClick={() => {
               if (modalActive) return;
-              if (!snap.paused) eng()?.togglePause();
+              eng()?.setUserPause(true);
               pauseMenuRequestedRef.current = true;
               setShowPauseMenu(true);
             }}
@@ -657,7 +728,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {/* 시너지 — 컴팩트 모드 (활성 개수 + 임박 시그널만 / 탭 시 펼침) */}
       {/* QA H-4: 첫 카드 픽 시 시너지 칩 숨김 */}
-      {!isFirstCardReveal && activeSynergyCount > 0 && (
+      {showAssistControls && !gameplayChoiceOpen && !blockingDecisionOpen && !isFirstCardReveal && activeSynergyCount > 0 && (
         <button
           style={styles.synergyCompact}
           onClick={() => setSynergyExpanded(!synergyExpanded)}
@@ -667,7 +738,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           <span style={styles.synergyTapHint}>↗</span>
         </button>
       )}
-      {synergyExpanded && (
+      {showAssistControls && !gameplayChoiceOpen && !blockingDecisionOpen && synergyExpanded && (
         <div style={styles.synergyExpandedPanel} onClick={() => setSynergyExpanded(false)}>
           {snap.synergyProgress?.map((sp: any) => (
             <div
@@ -1181,65 +1252,6 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 보유 영혼석 {stones.toLocaleString()}개 · 스킵해도 진행 가능
               </span>
             </div>
-            <div style={styles.waveBreakActions}>
-              <button
-                style={{
-                  ...styles.wbAction,
-                  ...(snap.waveBreakUsed.heal || !waveBreakAffordable.heal ? styles.wbActionUsed : {}),
-                  ...(hpRatio < 0.5 && waveBreakAffordable.heal ? styles.wbActionRecommend : {}),
-                }}
-                onClick={() => eng()?.waveBreakHeal()}
-                disabled={snap.waveBreakUsed.heal || !waveBreakAffordable.heal}
-              >
-                <div style={styles.wbIcon}>❤</div>
-                <div style={styles.wbBody}>
-                  <div style={styles.wbName}>마왕성 +30% HP</div>
-                  {!waveBreakAffordable.heal && !snap.waveBreakUsed.heal ? (
-                    <div style={styles.wbTip}>영혼석 부족</div>
-                  ) : hpRatio < 0.5 && !snap.waveBreakUsed.heal && (
-                    <div style={styles.wbTip}>💡 HP 50% 미만 — 추천</div>
-                  )}
-                </div>
-                <div style={styles.wbCost}>💎 {waveBreakCosts.heal}</div>
-              </button>
-              <button
-                style={{
-                  ...styles.wbAction,
-                  ...(snap.waveBreakUsed.mpRefill || !waveBreakAffordable.mpRefill ? styles.wbActionUsed : {}),
-                  ...(snap.mp < snap.cardCost && waveBreakAffordable.mpRefill ? styles.wbActionRecommend : {}),
-                }}
-                onClick={() => eng()?.waveBreakMpRefill()}
-                disabled={snap.waveBreakUsed.mpRefill || !waveBreakAffordable.mpRefill}
-              >
-                <div style={styles.wbIcon}>⚡</div>
-                <div style={styles.wbBody}>
-                  <div style={styles.wbName}>마력 풀충전</div>
-                  {!waveBreakAffordable.mpRefill && !snap.waveBreakUsed.mpRefill ? (
-                    <div style={styles.wbTip}>영혼석 부족</div>
-                  ) : snap.mp < snap.cardCost && !snap.waveBreakUsed.mpRefill && (
-                    <div style={styles.wbTip}>💡 마력 부족 — 추천</div>
-                  )}
-                </div>
-                <div style={styles.wbCost}>💎 {waveBreakCosts.mpRefill}</div>
-              </button>
-              <button
-                style={{
-                  ...styles.wbAction,
-                  ...(snap.waveBreakUsed.freespin || !waveBreakAffordable.freespin ? styles.wbActionUsed : {}),
-                }}
-                onClick={() => eng()?.waveBreakFreeSpin()}
-                disabled={snap.waveBreakUsed.freespin || !waveBreakAffordable.freespin}
-              >
-                <div style={styles.wbIcon}>🎴</div>
-                <div style={styles.wbBody}>
-                  <div style={styles.wbName}>무료 카드 준비</div>
-                  <div style={styles.wbTip}>
-                    {waveBreakAffordable.freespin ? '💡 다음 웨이브 전에 빌드 보강' : '영혼석 부족'}
-                  </div>
-                </div>
-                <div style={styles.wbCost}>💎 {waveBreakCosts.freespin}</div>
-              </button>
-            </div>
             <button
               style={styles.wbStart}
               onClick={async () => {
@@ -1254,6 +1266,18 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             >
               ⚔ 다음 웨이브 시작
             </button>
+            <div style={styles.waveBreakActions}>
+              {renderWaveBreakAction(waveBreakRecommendedKey)}
+              <button
+                style={styles.waveBreakDetailsToggle}
+                onClick={() => setWaveBreakDetailsOpen((v) => !v)}
+              >
+                {waveBreakDetailsOpen ? '정비 접기' : '다른 정비 보기'}
+              </button>
+              {waveBreakDetailsOpen && (['heal', 'mpRefill', 'freespin'] as const)
+                .filter((key) => key !== waveBreakRecommendedKey)
+                .map((key) => renderWaveBreakAction(key))}
+            </div>
           </div>
         </div>
       )}
@@ -1283,7 +1307,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               style={styles.pauseBtnPrimary}
               onClick={() => {
                 pauseMenuRequestedRef.current = false;
-                if (snap.paused) eng()?.togglePause();
+                eng()?.setUserPause(false);
                 setShowPauseMenu(false);
               }}
             >
@@ -1352,18 +1376,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {/* FTUE: 첫 카드 펼치기 가이드 텍스트 */}
       {firstSpinPulse && (
-        <>
-          <div style={styles.ftueHint}>
-            ↓ 운명의 카드를 펼쳐 몬스터를 소환하세요 ↓
-          </div>
-          {/* 첫 카드 역할 범례 — 카드를 누르기 전에 학습 */}
-          <div style={styles.roleLegend}>
-            <span style={styles.roleLegendItem}>🛡 탱커</span>
-            <span style={styles.roleLegendItem}>⚔ 근거리</span>
-            <span style={styles.roleLegendItem}>🏹 원거리</span>
-            <span style={styles.roleLegendItem}>🔮 마법</span>
-          </div>
-        </>
+        <div style={styles.ftueHint}>
+          ↓ 카드 펼치기부터 시작하세요 ↓
+        </div>
       )}
 
       {/* 첫 카드 선택 직후 → 진화 안내 toast (TUT-B: tut_first_pick 모달이 학습 담당하므로 보조 toast로 격하) */}
@@ -1413,10 +1428,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           50%     { box-shadow: inset 0 0 60px rgba(165,94,234,0.5); }
         }
         @keyframes spinPulseAnim {
-          0%,100% { transform:scale(1); box-shadow: 0 3px 0 #4a0a0a, 0 0 14px rgba(253,121,168,0.4); }
-          50%     { transform:scale(1.06); box-shadow: 0 3px 0 #4a0a0a, 0 0 28px rgba(253,203,110,1); }
+          0%,100% { box-shadow: 0 3px 0 #4a0a0a, 0 0 14px rgba(253,121,168,0.4); }
+          50%     { box-shadow: 0 3px 0 #4a0a0a, 0 0 26px rgba(253,203,110,0.95); }
         }
-        .spin-pulse { animation: spinPulseAnim 0.8s infinite; border-color: #FFEAA7 !important; }
+        .spin-pulse { animation: spinPulseAnim 1.2s ease-in-out infinite; border-color: #FFEAA7 !important; }
         @keyframes ftueHintAnim {
           0%,100% { opacity:0.7; transform:translate(-50%,0); }
           50%     { opacity:1; transform:translate(-50%,4px); }
@@ -1482,23 +1497,19 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(90deg, rgba(214,48,49,0.45) 0%, rgba(214,48,49,0) 100%)',
     animation: 'dangerPulse 1.2s infinite',
   },
-  castleWarnLabel: {
-    position: 'absolute', left: 8, top: 130, zIndex: 9,
-    pointerEvents: 'none',
-    color: '#FF6B6B', fontSize: 10, fontWeight: 'bold',
-    textShadow: '0 0 6px #D63031, 1px 1px 0 #000',
-    background: 'rgba(0,0,0,0.6)', padding: '3px 8px',
-    border: '1px solid #FF6B6B', borderRadius: 4,
-    letterSpacing: 1,
-  },
   contextHint: {
-    position: 'absolute', left: 8, top: 154, zIndex: 9,
+    position: 'absolute',
+    left: '50%',
+    bottom: 178,
+    transform: 'translateX(-50%)',
+    zIndex: 9,
     pointerEvents: 'none',
     color: '#FDCB6E', fontSize: 10, fontWeight: 'bold',
     textShadow: '1px 1px 0 #000',
-    background: 'rgba(0,0,0,0.7)', padding: '3px 8px',
+    background: 'rgba(0,0,0,0.68)', padding: '4px 10px',
     border: '1px solid #FDCB6E', borderRadius: 4,
     letterSpacing: 1,
+    whiteSpace: 'nowrap',
   },
   graspRing: {
     position: 'absolute',
@@ -1643,10 +1654,10 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '2px 2px 0 #000',
   },
   waveBreakSub: {
-    color: '#bbb', fontSize: 12, marginBottom: 16,
+    color: '#bbb', fontSize: 12, marginBottom: 10,
   },
   waveBreakActions: {
-    display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
+    display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10,
   },
   wbAction: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -1674,10 +1685,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(0,0,0,0.5)', padding: '2px 7px', borderRadius: 8,
   },
   wbStart: {
-    width: '100%', padding: '10px 16px',
-    background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
-    border: '1px solid #4a3a6e', borderRadius: 6,
-    color: '#bbb', fontWeight: 'bold', fontSize: 12, letterSpacing: 1,
+    width: '100%', padding: '13px 16px',
+    background: 'radial-gradient(ellipse at 50% 30%,#26de81,#128047)',
+    border: '2px solid #FFEAA7', borderRadius: 8,
+    color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 2,
+    fontFamily: 'inherit', cursor: 'pointer',
+    boxShadow: '0 3px 0 #064624, 0 0 14px rgba(38,222,129,0.5)',
+  },
+  waveBreakDetailsToggle: {
+    width: '100%', padding: '7px 12px',
+    background: 'rgba(20,12,42,0.45)',
+    border: '1px dashed #4a3a6e', borderRadius: 6,
+    color: '#bbb', fontSize: 10, fontWeight: 'bold',
     fontFamily: 'inherit', cursor: 'pointer',
   },
   revivalOverlay: {

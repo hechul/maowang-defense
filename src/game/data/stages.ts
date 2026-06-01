@@ -28,6 +28,8 @@ export interface StageModifier {
   castleHpMul?: number;
   /** 영혼석 보상 곱셈 */
   rewardMul?: number;
+  /** 웨이브당 일반 적 수 곱셈 */
+  waveTotalMul?: number;
 }
 
 /** 잠금 해제 조건 — 모두 OR 결합 (하나라도 만족하면 잠금 해제) */
@@ -116,6 +118,7 @@ export const STAGES: StageDefinition[] = [
     bossId: 'captain',
     stratumId: 'sealed_gate',
     recommendedTags: ['undead'],
+    stageModifier: { heroHpMul: 0.5, heroAtkMul: 0.8, mpRegenMul: 1.8, waveTotalMul: 0.35 },
     unlockCondition: undefined,  // 처음부터 열림
     firstClearReward: {
       // 첫 클리어 보상 — imp 모집 비용(100)보다 큼 → 100 잔여로 다음 진행 가능 (온보딩)
@@ -295,7 +298,7 @@ export const STAGES: StageDefinition[] = [
     recommendedTags: ['dark', 'undead', 'magic'],
     stageModifier: { heroHpMul: 1.70, heroAtkMul: 1.40, mpRegenMul: 0.85, castleHpMul: 1.30, rewardMul: 1.50 },
     unlockCondition: { clearedStageId: 'ch2_s4' },
-    firstClearReward: { soulstones: 5000, unlockFeatureIds: ['challenges'] },
+    firstClearReward: { soulstones: 5000, unlockFeatureIds: ['challenges'], unlockRecruitIds: ['devil'] },
     repeatReward: { soulstones: 1500, heroFragments: { priest: 5, healer: 3 } },
     tutorialHint: '챕터 2 종결 보스 — 도전 모드 잠금 해제.',
     icon: '🌌',
@@ -642,7 +645,7 @@ export const STAGES: StageDefinition[] = [
     recommendedTags: ['dark', 'fire', 'magic', 'undead'],
     stageModifier: { heroHpMul: 5.80, heroAtkMul: 4.70, castleHpMul: 2.40, rewardMul: 3.00 },
     unlockCondition: { clearedStageId: 'ch6_s4' },
-    firstClearReward: { soulstones: 50000, unlockRecruitIds: ['slord', 'ggen', 'awitch', 'owar'] },
+    firstClearReward: { soulstones: 50000 },
     repeatReward: { soulstones: 10000, heroFragments: { king: 10 } },
     tutorialHint: '【진왕의 결말】 인간 왕과 직접 대결.',
     icon: '👑',
@@ -728,7 +731,7 @@ export const STAGES: StageDefinition[] = [
     recommendedTags: ['dark', 'fire', 'magic', 'undead'],
     stageModifier: { heroHpMul: 7.60, heroAtkMul: 6.30, castleHpMul: 3.00, rewardMul: 3.80 },
     unlockCondition: { clearedStageId: 'ch7_s4' },
-    firstClearReward: { soulstones: 60000, unlockRecruitIds: ['mimic', 'lich'] },
+    firstClearReward: { soulstones: 60000 },
     repeatReward: { soulstones: 12000, heroFragments: { king: 12 } },
     tutorialHint: '【챕터 7 종결】 심해 봉인의 — 끝.',
     icon: '🌊',
