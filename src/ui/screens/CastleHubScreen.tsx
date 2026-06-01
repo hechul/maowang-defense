@@ -80,9 +80,15 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         className="hub-cta-pulse"
         onClick={startPrimaryBattle}
       >
-        <div style={styles.ctaTop}>{nextStage ? '다음 스테이지' : '바로 시작'}</div>
-        <div style={styles.ctaName}>⚔ 전투 시작</div>
-        <div style={styles.ctaSub}>카드 3장 중 하나를 골라 마왕성을 지키세요</div>
+        <div style={styles.ctaTop}>{nextStage ? '다음 침공 막기' : '심연 방어전'}</div>
+        <div style={styles.ctaName}>
+          {nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '⚔ 전투 시작'}
+        </div>
+        <div style={styles.ctaSub}>
+          {nextStage
+            ? `WAVE ${nextStage.waveLimit} 보스 처치 · 카드 3장 중 하나를 선택`
+            : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
+        </div>
       </button>
 
       <section style={styles.goalCard} aria-label="다음 목표">
@@ -91,7 +97,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
           <div style={styles.goalTitle}>{nextTitle}</div>
           <div style={styles.goalText}>{nextBody}</div>
         </div>
-        <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>작전 지도</button>
+        <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>다른 스테이지</button>
       </section>
 
       <section style={styles.roomSection} aria-label="핵심 메뉴">
@@ -101,7 +107,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
             icon="🏛"
             label="영혼 강화"
             hint={upgradableSkills > 0 ? `${upgradableSkills}개 가능` : '영구 성장'}
-            badge={upgradableSkills > 0 ? String(upgradableSkills) : null}
+            badge={upgradableSkills > 0 ? '!' : null}
             accent="#FDCB6E"
             onClick={() => onNavigate('skills')}
           />
@@ -117,7 +123,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
             icon="📖"
             label="도감"
             hint={`발견 ${discoveredMonsters.length}`}
-            badge={discoveredMonsters.length > 0 ? '!' : null}
+            badge={null}
             accent="#a55eea"
             onClick={() => onNavigate('bestiary')}
           />
@@ -126,7 +132,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          처음 목표는 단순합니다. <b>전투 시작</b>을 눌러 다음 스테이지를 바로 막아보세요.
+          처음 목표는 단순합니다. <b>다음 침공 막기</b>를 눌러 바로 막아보세요.
         </div>
       )}
 
@@ -240,10 +246,10 @@ const styles: Record<string, React.CSSProperties> = {
   demonOrb: {
     position: 'absolute',
     inset: 0,
-    background: 'radial-gradient(circle,#7B2D8E,#1a0828)',
+    background: 'linear-gradient(180deg,#7B2D8E,#1a0828)',
     border: '2px solid #FDCB6E',
-    borderRadius: '50%',
-    boxShadow: '0 0 8px rgba(253,121,168,0.5)',
+    borderRadius: 6,
+    boxShadow: '0 3px 0 #080412, inset 0 0 0 2px rgba(255,255,255,0.08)',
   },
   demonFigure: {
     position: 'absolute',

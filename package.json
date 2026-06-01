@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "check": "npm run validate:data && npm run lint",
+    "validate:data": "node scripts/validate-game-data.mjs",
     "ait:build": "ait build",
     "ait:deploy": "ait deploy",
     "lint": "tsc --noEmit"

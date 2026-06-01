@@ -361,6 +361,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const showDemonSpeech =
     !!snap.demonLine &&
     (snap.bossActive || snap.demonMood === 'urgent');
+  const showAssistControls =
+    (snap.wave ?? 1) >= 3 ||
+    snap.autoReveal ||
+    snap.speed !== 1;
+  const showAdvancedCardTools = (snap.wave ?? 1) >= 3;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
@@ -808,8 +813,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   rarity === 'epic' ? 1.02 :
                   1.0;
 
-                const lockUnlockedRuns = (snap.runs ?? 0) >= 3;
-                const canLock = lockUnlockedRuns && snap.mp >= 50 && snap.lockedCardId !== id;
+                const canLock = showAdvancedCardTools && snap.mp >= 50 && snap.lockedCardId !== id;
 
                 return (
                   <div key={`${id}-${i}-${snap.kills}`} style={styles.cardWrap}>
@@ -905,7 +909,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 );
               })}
             </div>
-            {snap.rerollAvailable && (
+            {showAdvancedCardTools && snap.rerollAvailable && (
               <button style={styles.rerollBtn} onClick={() => eng()?.rerollChoices()}>
                 🌀 운명의 카드 — 다시 뽑기
               </button>
@@ -913,6 +917,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           </>
         )}
 
+        {!gameplayChoiceOpen && !blockingDecisionOpen && !showPauseMenu && (
+        <>
         <div style={styles.actionRow}>
           {(() => {
             const cantReveal = snap.mp < snap.cardCost;
@@ -1034,43 +1040,49 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           >
             ⚡ 돌격{!snap.rallyReady && ` ${snap.rallyCdT?.toFixed(1)}s`}
           </button>
-          <button
-            style={{
-              ...styles.miniBtn,
-              flex: 1,
-              background: snap.autoReveal
-                ? 'linear-gradient(180deg,#26de81,#1a8048)'
-                : 'rgba(45,27,78,0.85)',
-              color: snap.autoReveal ? '#fff' : '#bbb',
-              border: snap.autoReveal ? '2px solid #FDCB6E' : '1px solid #4a3a6e',
-            }}
-            onClick={() => {
-              if (!controlsBlocked) eng()?.toggleAuto();
-            }}
-            disabled={controlsBlocked}
-            aria-label="AUTO 토글"
-          >
-            🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
-          </button>
-          <button
-            style={{
-              ...styles.miniBtn,
-              flex: 1,
-              background: snap.speed !== 1
-                ? 'linear-gradient(180deg,#FDCB6E,#D63031)'
-                : 'rgba(60,40,30,0.85)',
-              color: snap.speed !== 1 ? '#fff' : '#FDCB6E',
-              border: snap.speed !== 1 ? '2px solid #FDCB6E' : '1px solid #7a5a30',
-            }}
-            onClick={() => {
-              if (!controlsBlocked) eng()?.toggleSpeed();
-            }}
-            disabled={controlsBlocked}
-            aria-label="속도 토글"
-          >
-            ⏩ ×{snap.speed}
-          </button>
+          {showAssistControls && (
+            <button
+              style={{
+                ...styles.miniBtn,
+                flex: 1,
+                background: snap.autoReveal
+                  ? 'linear-gradient(180deg,#26de81,#1a8048)'
+                  : 'rgba(45,27,78,0.85)',
+                color: snap.autoReveal ? '#fff' : '#bbb',
+                border: snap.autoReveal ? '2px solid #FDCB6E' : '1px solid #4a3a6e',
+              }}
+              onClick={() => {
+                if (!controlsBlocked) eng()?.toggleAuto();
+              }}
+              disabled={controlsBlocked}
+              aria-label="AUTO 토글"
+            >
+              🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
+            </button>
+          )}
+          {showAssistControls && (
+            <button
+              style={{
+                ...styles.miniBtn,
+                flex: 1,
+                background: snap.speed !== 1
+                  ? 'linear-gradient(180deg,#FDCB6E,#D63031)'
+                  : 'rgba(60,40,30,0.85)',
+                color: snap.speed !== 1 ? '#fff' : '#FDCB6E',
+                border: snap.speed !== 1 ? '2px solid #FDCB6E' : '1px solid #7a5a30',
+              }}
+              onClick={() => {
+                if (!controlsBlocked) eng()?.toggleSpeed();
+              }}
+              disabled={controlsBlocked}
+              aria-label="속도 토글"
+            >
+              ⏩ ×{snap.speed}
+            </button>
+          )}
         </div>
+        </>
+        )}
       </div>
 
       {/* OVERHAUL §3.2: 분기 카드 선택 모달 (5wave마다) */}
@@ -1611,8 +1623,6 @@ const styles: Record<string, React.CSSProperties> = {
   waveBreakOverlay: {
     position: 'absolute', inset: 0, zIndex: 95,
     background: 'rgba(5,3,15,0.78)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 18,
     animation: 'fadeIn 0.25s ease-out',
@@ -1670,9 +1680,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   revivalOverlay: {
     position: 'absolute', inset: 0, zIndex: 200,
-    background: 'radial-gradient(circle at center, rgba(214,48,49,0.45) 0%, rgba(5,3,15,0.85) 70%)',
-    backdropFilter: 'blur(6px)',
-    WebkitBackdropFilter: 'blur(6px)',
+    background: 'rgba(35,6,20,0.88)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 20,
     animation: 'fadeIn 0.25s ease-out',
@@ -1833,10 +1841,10 @@ const styles: Record<string, React.CSSProperties> = {
     width: 36, height: 36,
     fontSize: 26,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'radial-gradient(circle, #2D1B4E, #0a0820)',
+    background: 'linear-gradient(180deg, #2D1B4E, #0a0820)',
     border: '2px solid #FDCB6E',
-    borderRadius: '50%',
-    boxShadow: '0 0 8px rgba(253,203,110,0.5)',
+    borderRadius: 6,
+    boxShadow: '0 3px 0 #080412',
     flex: '0 0 36px',
   },
   demonBubble: {
@@ -2291,8 +2299,6 @@ const styles: Record<string, React.CSSProperties> = {
   relicModal: {
     position: 'absolute', inset: 0, zIndex: 90,
     background: 'rgba(5,3,15,0.78)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
     padding: 18,

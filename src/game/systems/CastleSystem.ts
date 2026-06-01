@@ -42,7 +42,7 @@ export function calculateCastleMaxHp(input: CastleMaxHpInput): number {
  * ===================================================================== */
 
 export interface StartMpInput {
-  /** 베이스 (현재 200 — 2회 카드 펼치기 가능) */
+  /** 베이스 (현재 100 — 첫 카드 1회 보장, 이후 처치/회복으로 연결) */
   base: number;
   /** mpMax 상한 (현재 300) */
   mpMax: number;

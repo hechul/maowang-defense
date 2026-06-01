@@ -306,7 +306,7 @@ export const STAGES: StageDefinition[] = [
     name: '변경의 봉화',
     subtitle: '챕터 3 시작',
     description: '용사들이 새로운 세대를 모집하여 변경 마을에서 진군한다.',
-    waveLimit: 12,
+    waveLimit: 15,
     heroPool: ['apprentice', 'swordsman', 'spear', 'archer'],
     bossId: 'captain',
     stratumId: 'forgotten_grave',

@@ -94,7 +94,10 @@ const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
 const MONSTER_FRONT_X = W - 120;
-const MVP_FIRST_RELIC_WAVE = 4;
+const MONSTER_BACK_X = 70;
+const HERO_CASTLE_X = 80;
+const HERO_MAX_X = W + 24;
+const MVP_FIRST_RELIC_WAVE = 8;
 const MVP_RELIC_INTERVAL = 4;
 
 interface UnitOpts {
@@ -389,6 +392,7 @@ export class GameEngine {
   rerollAvailable = false;
   // AUTO 카드 자동 선택 타이머 (0.6초 후 picks)
   private _autoPickT = 0.6;
+  private _autoRevealCooldownT = 0;
   // 카드 펼치기 횟수 (첫 3회 할인용)
   cardRevealCount = 0;
   // BAL-7: 위급 상태 무료 펼치기 1회 (1런당)
@@ -699,9 +703,9 @@ export class GameEngine {
     this.castleHp = this.castleMaxHp;
     this.displayHp = this.castleHp;
     this.mpMax = 300;
-    // CastleSystem: 시작 마력 (베이스 200 = 2회 펼치기 즉시 가능)
+    // CastleSystem: 시작 마력 (베이스 100 = 첫 카드 1회 보장, 두 번째는 처치/회복으로 연결)
     this.mp = calculateStartMp({
-      base: 200 + lvBonus.startMpBonus + charStartMp + this._secretsAggregate.startMpBonus,
+      base: 100 + lvBonus.startMpBonus + charStartMp + this._secretsAggregate.startMpBonus,
       mpMax: this.mpMax,
       startMpSkillLevel: skills.startMp,
       demonPowerBonus: dp.startMpBonus,
@@ -738,6 +742,8 @@ export class GameEngine {
     this.freezeTimer = 15;
     this.infernoTimer = 10;
     this.rerollAvailable = false;
+    this._autoPickT = 0.6;
+    this._autoRevealCooldownT = 0;
     this.ultiVariant = 0;
     this.cardRevealCount = 0;
     this.pendingRevival = false;
@@ -1090,6 +1096,9 @@ export class GameEngine {
       }
       // AUTO 모드 — 카드 펼치기 + 자동 선택 (decision fatigue 제거)
       // 의사결정 모달이 열려 있을 때는 뒤에서 새 카드 공개/선택을 시작하지 않는다.
+      if (this._autoRevealCooldownT > 0) {
+        this._autoRevealCooldownT = Math.max(0, this._autoRevealCooldownT - dt);
+      }
       const autoBlocked =
         !!this.pendingRelicChoices ||
         !!this.pendingEvent ||
@@ -1108,7 +1117,7 @@ export class GameEngine {
           }
         } else {
           this._autoPickT = 0.6;  // 다음 카드 펼치기 후 사용할 타이머 리셋
-          if (this.mp >= this.currentCardCost()) this.beginSpin();
+          if (this._autoRevealCooldownT <= 0 && this.mp >= this.currentCardCost()) this.beginSpin();
         }
       }
     }
@@ -1131,8 +1140,9 @@ export class GameEngine {
     this.waveSpawned = 0;
     this.eliteSpawnedThisWave = false;
     const baseWaveTotal = Math.floor(3 + this.wave * 1.5);
+    const stageWaveTotal = Math.floor(2 + this.wave * 1.15 + Math.max(0, this.wave - 4) * 0.55);
     this.waveTotal = this.runMode === 'stage'
-      ? Math.max(3, Math.floor(2 + this.wave * 1.15))
+      ? Math.max(3, stageWaveTotal)
       : baseWaveTotal;
     this.waveCleared = false;
     this.waveTimer = 1.0;
@@ -1648,6 +1658,7 @@ export class GameEngine {
     u.y = lineY + (Math.floor(live / 6) % 2 === 1 ? 4 : 0);
     const lineX = isTank ? -10 : isRanged ? 14 : 0;
     u.x += lineX;
+    this.clampUnitX(u);
 
     this.monsters.push(u);
     // 소환 마법진 (등급별 색)
@@ -2038,10 +2049,10 @@ export class GameEngine {
 
     // 버그 #1 수정: hero가 마왕성 사거리(x<80)에 도달하면 monster 무시하고 마왕성 우선 공격
     // 이전 로직: target이 null일 때만 마왕성 공격 → monster 살아있으면 영원히 안 깨짐
-    if (u.team === 'hero' && u.x < 80) {
+    if (u.team === 'hero' && u.x < HERO_CASTLE_X) {
       // F-2: 마왕성 앞 도달 시 walk 애니 정지 + 라인 정렬
       u._isMoving = false;
-      u.x = 80;  // 정확한 라인에 snap
+      u.x = HERO_CASTLE_X;  // 정확한 라인에 snap
       if (u.atkTimer <= 0 && u.attackPhase === 0) {
         let dmg = u.effAtk();
         // titan: 마왕성 받는 데미지 ×0.7
@@ -2051,8 +2062,8 @@ export class GameEngine {
         this.castleHp = Math.max(0, this.castleHp - dmg);
         this.recentCastleDamage.push({ t: performance.now(), d: dmg });
         u.atkTimer = u.atkCd;
-        this.spawnParticles(80, GROUND_Y - 24, MASTER_PAL.crimson, 9);
-        this.spawnDamageText(80, GROUND_Y - 32, '-' + Math.ceil(dmg), MASTER_PAL.crimson, true);
+        this.spawnParticles(HERO_CASTLE_X, GROUND_Y - 24, MASTER_PAL.crimson, 9);
+        this.spawnDamageText(HERO_CASTLE_X, GROUND_Y - 32, '-' + Math.ceil(dmg), MASTER_PAL.crimson, true);
         this.shakeFx(5);
         Audio.hit_damage();
         Ait.haptic('medium');
@@ -2087,15 +2098,24 @@ export class GameEngine {
           return;
         }
         u.x += dir * u.effSpd() * dt;
-        if (u.team === 'monster') u.x = Math.min(u.x, MONSTER_FRONT_X);
+        this.clampUnitX(u);
         u.walkT += dt;
         u._isMoving = true;
       }
     } else if (u.team === 'hero') {
       // monster 모두 처치된 경우: 마왕성으로 진격
       u.x -= u.effSpd() * dt;
+      this.clampUnitX(u);
       u.walkT += dt;
       u._isMoving = true;
+    }
+  }
+
+  private clampUnitX(u: Unit) {
+    if (u.team === 'hero') {
+      u.x = Math.min(HERO_MAX_X, Math.max(HERO_CASTLE_X, u.x));
+    } else {
+      u.x = Math.min(MONSTER_FRONT_X, Math.max(MONSTER_BACK_X, u.x));
     }
   }
 
@@ -2141,6 +2161,7 @@ export class GameEngine {
       }
       if (u.knockback && !target.isBoss) {
         target.x += (u.team === 'monster' ? u.knockback : -u.knockback);
+        this.clampUnitX(target);
       }
       // 히트스파크 (PIXEL §파트4)
       this.spawnHitSpark(target.x, target.y - 14, u.team === 'monster' ? '#FD79A8' : '#FDCB6E');
@@ -3540,6 +3561,7 @@ export class GameEngine {
       activeSynergyIds: this.activeSynergies,
     });
     this.chooseCard(scored.bestIdx);
+    this._autoRevealCooldownT = 1.2;
   }
 
   /* ===== Ultimate ===== */

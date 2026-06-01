@@ -332,8 +332,14 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
   const isStageMode = gm ? gm.kind === 'stage' : stats.mode === 'stage';
   const isChallengeMode = gm?.kind === 'challenge';
   const stageCleared = isStageMode && stats.cleared === true;
+  const showMetaFlavor = !isStageMode;
   const stageDef = stats.stageId ? getStageById(stats.stageId) : undefined;
   const isFirstClear = !!stats.firstClear;
+  const showDemonComment = showMetaFlavor || (stageCleared && isFirstClear);
+  const showRunPattern = showMetaFlavor
+    || stageCleared
+    || stats.wave >= 5
+    || (stats.dominantBuildProgress ?? 0) >= 0.75;
   const titleText = isStageMode
     ? (stageCleared ? '🏰 침공 방어 성공!' : '⚔ 성문이 뚫렸다')
     : isChallengeMode
@@ -358,25 +364,25 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       <h1 style={styles.title}>{titleText}</h1>
       <div style={styles.sub}>{subText}</div>
 
-      {/* 마왕 코멘트 — 톤 분기 (clear/fail/endless) */}
-      <div style={styles.demonComment}>
-        <div style={styles.demonCommentIcon}>
-          {stageCleared ? '😈' : isStageMode ? '😡' :
-            isNewRecord ? '😈' : stats.wave >= 25 ? '😈' : stats.wave >= 10 ? '🌑' : stats.wave >= 5 ? '😡' : '😨'}
-        </div>
-        <div style={styles.demonCommentBubble}>
-          <div style={styles.demonCommentName}>— 마왕</div>
-          <div style={styles.demonCommentText}>
-            {stageCleared
-              ? '"이번 침공도 막아냈다. 다음을 준비한다."'
-              : isStageMode
-                ? '"성문이 뚫렸지만, 정비할 시간은 있다."'
+      {/* 마왕 코멘트 — 스테이지 실패는 핵심 정보만 보이도록 숨김 */}
+      {showDemonComment && (
+        <div style={styles.demonComment}>
+          <div style={styles.demonCommentIcon}>
+            {stageCleared ? '😈' :
+              isNewRecord ? '😈' : stats.wave >= 25 ? '😈' : stats.wave >= 10 ? '🌑' : stats.wave >= 5 ? '😡' : '😨'}
+          </div>
+          <div style={styles.demonCommentBubble}>
+            <div style={styles.demonCommentName}>— 마왕</div>
+            <div style={styles.demonCommentText}>
+              {stageCleared
+                ? '"이번 침공도 막아냈다. 다음을 준비한다."'
                 : isNewRecord
                   ? '"기록이 깨졌다. 더 멀리 가자."'
                   : `"${death.reason}. 준비하라."`}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 작전 요약 — 정보 다이어트:
           - stage clear: 영혼석만 큰 글자, MVP/요약 접힘
@@ -432,19 +438,19 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           )}
         </div>
         {/* W4 마왕 echo + W3 NPC 사망 누적 반응 + W4 일일 라인 */}
-        {echoLineRef.current && (
+        {showMetaFlavor && echoLineRef.current && (
           <div style={echoStyles.echoBox}>
             <div style={echoStyles.echoLabel}>— 마왕 —</div>
             <div style={echoStyles.echoBody}>{echoLineRef.current}</div>
           </div>
         )}
-        {dailyHint && (
+        {showMetaFlavor && dailyHint && (
           <div style={echoStyles.dailyBox}>
             <span style={echoStyles.dailyIcon}>🌅</span>
             <span style={echoStyles.dailyText}>{dailyHint}</span>
           </div>
         )}
-        {npcReactionRef.current && (
+        {showMetaFlavor && npcReactionRef.current && (
           <div style={{ ...echoStyles.npcBox, borderColor: npcReactionRef.current.npc.accent }}>
             <div style={echoStyles.npcHead}>
               <span style={echoStyles.npcIcon}>{npcReactionRef.current.npc.icon}</span>
@@ -565,7 +571,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       })()}
 
       {/* dominant build가 없을 때만 — 가장 많이 픽한 태그 fallback (짧은 런에서도 픽 경향 노출) */}
-      {!stats.dominantBuildId && stats.topPickedTag && (
+      {showRunPattern && !stats.dominantBuildId && stats.topPickedTag && (
         <div style={styles.tagFallback}>
           <span style={styles.tagFallbackTop}>📊 이번 런 픽 경향</span>
           <span style={styles.tagFallbackName}>
@@ -575,7 +581,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* OVERHAUL §3.3: 빌드 컨셉 진행도 */}
-      {stats.dominantBuildId && (() => {
+      {showRunPattern && stats.dominantBuildId && (() => {
         const build = BUILDS.find((b) => b.id === stats.dominantBuildId);
         if (!build) return null;
         const progress = stats.dominantBuildProgress ?? 0;
@@ -631,7 +637,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* 6런 진입 보호 종료 안내 */}
-      {runs === 5 && (
+      {showMetaFlavor && runs === 5 && (
         <div style={styles.recCardLocked}>
           <div style={styles.recTop}>🎓 신규 보호 종료</div>
           <div style={styles.recMain}>
@@ -728,9 +734,6 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
               ⚔ 바로 재도전
             </button>
           )}
-          <button style={styles.btnRetrySecondary} onClick={() => onNavigate('recruit')}>
-            👹 모집소 보기
-          </button>
         </>
       ) : recommendedUpgrade ? (
         <>
@@ -766,7 +769,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       `}</style>
 
       {/* 완료된 미션 알림 (이번 런으로 달성) */}
-      {completedMissions.length > 0 && (
+      {showMetaFlavor && completedMissions.length > 0 && (
         <button
           style={styles.missionNotice}
           onClick={() => onNavigate('missions')}
@@ -778,7 +781,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       <div style={styles.menuRow}>
         <button style={styles.btnSecondary} onClick={() => onNavigate('castleHub')}>🏰 마왕성</button>
         {/* ★ 친구 초대 자랑 — 3런 이상만 (정보 다이어트) */}
-        {runs >= 3 && (
+        {showMetaFlavor && runs >= 3 && (
           <button
             style={{ ...styles.btnSecondary, ...(shareRewardAvailable ? styles.btnSecondaryHighlight : {}) }}
             onClick={handleShare}
@@ -1096,10 +1099,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   demonCommentIcon: {
     width: 32, height: 32,
-    background: 'radial-gradient(circle,#2D1B4E,#0a0820)',
-    border: '1.5px solid #FDCB6E', borderRadius: '50%',
+    background: 'linear-gradient(180deg,#2D1B4E,#0a0820)',
+    border: '1.5px solid #FDCB6E', borderRadius: 6,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontSize: 22, flex: '0 0 32px',
+    boxShadow: '0 2px 0 #080412',
   },
   demonCommentBubble: { flex: 1, minWidth: 0 },
   demonCommentName: { color: '#FD79A8', fontSize: 9, letterSpacing: 1, marginBottom: 2 },
