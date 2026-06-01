@@ -6,6 +6,8 @@
  * AIT_SENIOR_DEV §검수 영역 3 (기능): 광고/IAP/오프라인 안전 처리 필수
  */
 
+import { ENABLE_MONETIZATION } from '../config/mvpFlags';
+
 export type AdResult = { success: boolean; reward?: { type: string; amount: number } };
 export type IapResult = { success: boolean; itemId: string; transactionId?: string; error?: string };
 export type UserInfo = { userId: string; nickname: string; profileImageUrl?: string };
@@ -71,6 +73,10 @@ const AD_SIMULATION_MS = {
 };
 
 export async function showRewardedAd(placement: string): Promise<AdResult> {
+  if (!ENABLE_MONETIZATION) {
+    console.warn('[AitBridge] monetization disabled:', placement);
+    return { success: false };
+  }
   await ensureSdk();
   if (sdkApi?.showAd) {
     try {
@@ -91,6 +97,7 @@ export async function showRewardedAd(placement: string): Promise<AdResult> {
 }
 
 export async function showInterstitialAd(): Promise<void> {
+  if (!ENABLE_MONETIZATION) return;
   await ensureSdk();
   if (sdkApi?.showAd) {
     try { await sdkApi.showAd({ type: 'interstitial' }); } catch (e) {}
@@ -104,6 +111,10 @@ export async function showInterstitialAd(): Promise<void> {
 
 /* ===== 인앱결제 ===== */
 export async function purchaseItem(itemId: string): Promise<IapResult> {
+  if (!ENABLE_MONETIZATION) {
+    console.warn('[AitBridge] purchase blocked while monetization disabled:', itemId);
+    return { success: false, itemId, error: 'monetization_disabled' };
+  }
   await ensureSdk();
   if (sdkApi?.purchaseItem) {
     try {

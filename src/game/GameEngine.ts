@@ -9,6 +9,7 @@
  *   engine.dispose();  // unmount 시 호출
  */
 import { Audio } from '../audio/AudioEngine';
+import { ENABLE_MONETIZATION } from '../config/mvpFlags';
 import { MASTER_PAL } from './rendering/palette';
 import { MONSTERS, pickRandomMonster, MONSTER_SHEET_IDS, MONSTER_SHEET_FRAMES, type MonsterDef } from './data/monsters';
 import { HEROES, heroPoolForWave, HERO_SHEET_IDS, HERO_SHEET_FRAMES, type HeroDef } from './data/heroes';
@@ -92,7 +93,7 @@ import {
 const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
-const MONSTER_FRONT_X = W - 95;
+const MONSTER_FRONT_X = W - 120;
 const MVP_FIRST_RELIC_WAVE = 4;
 const MVP_RELIC_INTERVAL = 4;
 
@@ -271,6 +272,8 @@ export interface GameOverStats {
   challengeReward?: number;
   /** 챌린지 ID — UI에서 def 조회용 (gameMode가 더 정확 — 이건 호환용) */
   challengeIdAtClear?: string;
+  /** 결과 화면 EXP/문구용: 이번 런을 승리로 볼 수 있는지 */
+  isVictory?: boolean;
   wave: number;
   killCount: number;
   comboBest: number;
@@ -280,6 +283,8 @@ export interface GameOverStats {
   // OVERHAUL §3.3: 빌드 통계
   dominantBuildId?: string;
   dominantBuildProgress?: number;
+  buildCompleted?: boolean;
+  buildTitleClaimed?: boolean;
   // ★ ResultScreen 작전 화면 — 사망 원인 추정 + MVP 카드용
   bossKills: number;                          // 이번 런 보스 처치 수
   diedDuringBoss: boolean;                    // 사망 시 보스전 여부
@@ -461,6 +466,7 @@ export class GameEngine {
   /** 챌린지 클리어 라벨 정보 (W15 통과 시점에 캡처 — gameOver stats에 사용) */
   private _challengeClearedId: string | null = null;
   private _challengeFirstClearLabeled = false;
+  private _challengeRewardClaimed = false;
   /** 스테이지 modifier 합산값 (start 시점에 결정 — 매 frame 안 읽음) */
   stageMod = {
     heroHpMul: 1,
@@ -630,6 +636,8 @@ export class GameEngine {
     // OVERHAUL §3.4: 마왕 강화 power 합산 (누적 보스 처치 기반)
     const dp = aggregatedDemonPower(useSaveStore.getState().totalBossKills);
     this.demonPower = dp;
+    // 비밀 능력은 시작 HP/마력 계산에도 들어가므로 계산 전에 먼저 고정한다.
+    this._secretsAggregate = aggregateDemonSecrets(useSaveStore.getState().unlockedSecrets);
     this.emergencyRevealUsedCount = 0;
     // OVERHAUL §4.5: 인테리어 보너스 합산
     const interior = aggregatedInteriorBonus(useSaveStore.getState().equippedInteriors);
@@ -764,7 +772,6 @@ export class GameEngine {
     this._activeSeasonalBoss = null;
     this._runReviveCount = 0;
     this._runTripleCount = 0;
-    this._secretsAggregate = aggregateDemonSecrets(useSaveStore.getState().unlockedSecrets);
     this.demonMood = 'calm';
     this.demonLine = null;
     // ★ 작전 화면 추적 리셋
@@ -777,6 +784,7 @@ export class GameEngine {
     this.stageCleared = false;
     this._challengeClearedId = null;
     this._challengeFirstClearLabeled = false;
+    this._challengeRewardClaimed = false;
     // 스테이지 modifier 적용 (스테이지 모드 전용 — endless는 항상 1)
     {
       const m = (this.runMode === 'stage' && this.runStageDef?.stageModifier) || {};
@@ -1005,21 +1013,9 @@ export class GameEngine {
         this.demonLine.t += rawDt;
         if (this.demonLine.t >= this.demonLine.life) this.demonLine = null;
       }
-      const surge = this.relics.has('surge') ? 3 : 1;
-      const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
-      const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
       // MVP 밸런스: 마력이 너무 빨리 차면 "계속 뽑으면 승리"가 된다.
       // 자연 회복은 낮추고, 처치/위기 대응으로 소환 타이밍을 만들게 한다.
-      this.addMP(dt * 2.4 * surge * mpRegenMul * this.stageMod.mpRegenMul);
-      // 5차 — 진화 유물 prophecy/necropolis/karma: 추가 마력 회복 (per second)
-      const fusedMpAdd = this.fusedEffectAdd('mpRegenAdd');
-      if (fusedMpAdd > 0) this.addMP(dt * fusedMpAdd);
-      // 5차 — 마왕 비밀 능력 mp regen (영구)
-      if (this._secretsAggregate.mpRegenAdd > 0) {
-        this.addMP(dt * this._secretsAggregate.mpRegenAdd);
-      }
-      // 5차 — 숨겨진 시너지 mp regen
-      if (this._hiddenMpRegenAdd > 0) this.addMP(dt * this._hiddenMpRegenAdd);
+      this.addMP(dt * this.estimateMpRegenPerSec());
       // 마력 풀 도달 신호 (자연 충전으로 cardCost 도달 순간 1회만 ping)
       const cost = this.currentCardCost();
       const hasEnough = this.mp >= cost;
@@ -1053,7 +1049,9 @@ export class GameEngine {
           this.queueTutorial(
             'tut_hp_danger',
             '⚠ 마왕성 위급',
-            'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\nHP 0이 되면 광고 보고 부활할 수 있어요.',
+            ENABLE_MONETIZATION
+              ? 'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\nHP 0이 되면 광고 보고 부활할 수 있어요.'
+              : 'HP 20% 미만 — 화면 가장자리 빨간 비네트.\n\n💡 ⚡ 돌격으로 시간 벌기\n💡 필살기 충전됐다면 즉시 사용\n\nMVP 테스트에서는 부활 광고가 꺼져 있어요.',
             '⚠',
           );
         }
@@ -1132,7 +1130,10 @@ export class GameEngine {
   private startWave() {
     this.waveSpawned = 0;
     this.eliteSpawnedThisWave = false;
-    this.waveTotal = Math.floor(3 + this.wave * 1.5);
+    const baseWaveTotal = Math.floor(3 + this.wave * 1.5);
+    this.waveTotal = this.runMode === 'stage'
+      ? Math.max(3, Math.floor(2 + this.wave * 1.15))
+      : baseWaveTotal;
     this.waveCleared = false;
     this.waveTimer = 1.0;
     this.bossSpawned = false;
@@ -1427,7 +1428,7 @@ export class GameEngine {
       if (this.wave >= 30) unlockAchievement('infinity');
       // 챌린지 모드: 웨이브 15 클리어 시 보상
       // ECON E-3: 첫 클리어는 full reward, 재도전은 10% 지급
-      if (this.challengeId && this.wave >= 15) {
+      if (this.challengeId && !this._challengeRewardClaimed && this.wave >= 15) {
         const ch = CHALLENGES[this.challengeId];
         if (ch) {
           const alreadyDone = useSaveStore.getState().challengesDone.includes(this.challengeId);
@@ -1440,7 +1441,7 @@ export class GameEngine {
             this._challengeFirstClearLabeled = false;
           }
           this._challengeClearedId = this.challengeId;  // gameOver에서 라벨용
-          this.challengeId = null;  // 1회만 (재도전 보상도 단일 적립)
+          this._challengeRewardClaimed = true;  // 보상만 1회, 챌린지 modifier는 런 끝까지 유지
         }
       }
       // 25% 이벤트, 75% 유물
@@ -1600,10 +1601,7 @@ export class GameEngine {
     const live = this.monsters.filter((m) => !m.dead).length;
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
     // MonsterStatsSystem: 동시 배치 cap
-    const maxMon = calculateMonsterMax({
-      challengeMaxMonsters: ch?.modifiers.maxMonsters,
-      hasSwarmRelic: this.relics.has('swarm'),
-    });
+    const maxMon = this.currentMonsterCap();
     // BUG-005: force=true 시 maxMon 우회 (진화 결과 손실 방지)
     if (live >= maxMon && !opts?.force) return;
     const sprite = def.buildSprite();
@@ -2810,7 +2808,7 @@ export class GameEngine {
   }
 
   /* ===== Spin ===== */
-  /** 카드 펼치기 비용 — 첫 3회는 50% 할인 (Brotato/뱀서 초반 가속 패턴) */
+  /** 카드 펼치기 비용 — 첫 2회는 온보딩 할인, 이후 점진 상승 */
   currentCardCost() {
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
     let c = calculateCardCost({
@@ -2834,13 +2832,33 @@ export class GameEngine {
     }
     return c;
   }
-  beginSpin() {
+
+  private currentMonsterCap() {
+    const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
+    return calculateMonsterMax({
+      challengeMaxMonsters: ch?.modifiers.maxMonsters,
+      hasSwarmRelic: this.relics.has('swarm'),
+    });
+  }
+
+  private estimateMpRegenPerSec() {
+    const surge = this.relics.has('surge') ? 3 : 1;
+    const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
+    const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
+    const natural = 2.4 * surge * mpRegenMul * this.stageMod.mpRegenMul;
+    const relicAdd = this.fusedEffectAdd('mpRegenAdd');
+    const secretAdd = this._secretsAggregate.mpRegenAdd;
+    const synergyAdd = this._hiddenMpRegenAdd;
+    return Math.max(0.1, natural + relicAdd + secretAdd + synergyAdd);
+  }
+
+  beginSpin(opts: { free?: boolean; allowDuringWaveBreak?: boolean } = {}) {
     if (
       this.stageCleared ||
       this.pendingRelicChoices ||
       this.pendingEvent ||
       this.pendingRevival ||
-      this.waveBreakActive ||
+      (this.waveBreakActive && !opts.allowDuringWaveBreak) ||
       this.pendingBranchChoices ||
       this.tutorialQueue.length > 0
     ) {
@@ -2850,6 +2868,11 @@ export class GameEngine {
     if (this.cardChoices || this.slot.active) return false;
     const cost = this.currentCardCost();
     const aliveCount = this.monsters.filter((m) => !m.dead).length;
+    if (aliveCount >= this.currentMonsterCap()) {
+      this.showBanner('⚠ 군단이 가득 찼습니다', '용사를 처치한 뒤 카드를 펼치세요', '#FDCB6E', 1.2);
+      Audio.ui_error();
+      return false;
+    }
     // CardSystem: 위급 무료 펼치기 판정
     const emergency = shouldGrantEmergencyReveal({
       mp: this.mp,
@@ -2860,7 +2883,9 @@ export class GameEngine {
       emergencyMaxUses: 1 + this.demonPower.emergencyRevealExtra,
     });
     let isEmergency = false;
-    if (!emergency.hasEnoughMp) {
+    if (opts.free) {
+      isEmergency = true;
+    } else if (!emergency.hasEnoughMp) {
       if (emergency.emergencyAllowed) {
         this.emergencyRevealUsed = true;
         this.emergencyRevealUsedCount++;
@@ -3138,13 +3163,19 @@ export class GameEngine {
   /** 웨이브 사이 — 즉시 카드 펼치기 (영혼석 40) */
   waveBreakFreeSpin() {
     if (!this.waveBreakActive || this.waveBreakUsed.freespin) return false;
+    if (this.cardChoices || this.slot.active || this.pendingRelicChoices || this.pendingEvent || this.pendingBranchChoices) {
+      Audio.ui_error();
+      return false;
+    }
+    if (this.monsters.filter((m) => !m.dead).length >= this.currentMonsterCap()) {
+      this.showBanner('⚠ 군단이 가득 찼습니다', '처치 후 카드 펼치기 가능', '#FDCB6E', 1.2);
+      Audio.ui_error();
+      return false;
+    }
     if (!useSaveStore.getState().spendStones(40)) { Audio.ui_error(); return false; }
     this.waveBreakUsed.freespin = true;
-    // 강제 펼치기 (마력 차감 X — 무료 효과)
-    const save = this.mp;
-    this.mp = this.currentCardCost();
-    this.beginSpin();
-    this.mp = Math.max(0, save);  // 비용 무료
+    // waveBreakActive 중에도 허용하되, UI 카드는 준비 단계 종료 후 자연스럽게 보인다.
+    this.beginSpin({ free: true, allowDuringWaveBreak: true });
     return true;
   }
   /** 웨이브 사이 — 다음 웨이브 시작 */
@@ -3353,7 +3384,7 @@ export class GameEngine {
       cardChoices: this.cardChoices,
       idx,
       aliveMonsterCount: this.monsters.filter((m) => !m.dead).length,
-      maxMonsters: 14,
+      maxMonsters: this.currentMonsterCap(),
       riskCardSlot: this.riskCardSlot,
     });
     if (!r.ok) {
@@ -4828,7 +4859,7 @@ export class GameEngine {
   private tryRevivalOrGameOver() {
     if (this.state === 'gameover') return;
     const runs = useSaveStore.getState().runs;
-    if (!this.revivalUsed && runs >= 3) {
+    if (ENABLE_MONETIZATION && !this.revivalUsed && runs >= 3) {
       // 단계 3 예외: 부활은 큐 적재 시 영영 못 뜰 위험이 있어 강제 즉시 open.
       // 우선순위 70(revival) < 90(tutorial)이지만, paused 상태에서 hero damage 없으므로
       // tutorial 활성 + castleHp=0 도달 동시 시나리오는 사실상 발생 0.
@@ -4874,10 +4905,7 @@ export class GameEngine {
     // QA M-2: 무료 카드 1회 즉시 발동 (0.5초 지연으로 freeze 시각 우선 노출)
     this.safeTimeout(() => {
       if (!this.cardChoices && !this.slot.active) {
-        const save = this.mp;
-        this.mp = this.currentCardCost();
-        this.beginSpin();
-        this.mp = save;  // 비용 무료
+        this.beginSpin({ free: true });
       }
     }, 500);
   }
@@ -4965,10 +4993,12 @@ export class GameEngine {
         ? this.challengeBonusStones
         : undefined,
       challengeIdAtClear: this._challengeClearedId ?? undefined,
+      isVictory: this.stageCleared,
       wave: this.wave, killCount: this.killCount, comboBest: this.comboBest,
       relics: Array.from(this.relics), durationSec: sec, soulstones: stones,
       dominantBuildId: dominant?.build.id,
       dominantBuildProgress: dominant?.progress,
+      buildCompleted: !!(dominant && dominant.progress >= 1),
       // ★ 작전 화면 페이로드
       bossKills: this.buildStats.bossKills,
       diedDuringBoss: this.bossActive,
@@ -4989,6 +5019,7 @@ export class GameEngine {
       // 영혼석 보상 + 영구 칭호 (첫 달성 시에만 추가 보너스 100)
       useSaveStore.getState().addStones(dominant.build.reward);
       const isNew = useSaveStore.getState().recordBuildTitle(dominant.build.id);
+      stats.buildTitleClaimed = isNew;
       if (isNew) useSaveStore.getState().addStones(100);
     }
     // 단계 6: 스테이지 클리어 시 영구 진행도 기록 (첫 클리어 보상 + 모집 잠금 해제)
@@ -5253,6 +5284,7 @@ export class GameEngine {
       ultiGauge: this.ulti.gauge / this.ulti.max,
       paused: this.paused, speed: this.speed, autoReveal: this.autoReveal,
       cardCost: this.currentCardCost(),
+      mpRegenPerSec: this.estimateMpRegenPerSec(),
       relics: Array.from(this.relics),
       synergies: Array.from(this.activeSynergies),
       synergyProgress,
@@ -5291,8 +5323,10 @@ export class GameEngine {
       runs: useSaveStore.getState().runs,
       cardRevealCount: this.cardRevealCount,
       autoPickT: this._autoPickT,
-      // FEEL F-7: 살아있는 monster 수 (cap 14)
+      // FEEL F-7: 살아있는 monster 수와 현재 cap
       aliveMonsters: this.monsters.filter((m) => !m.dead).length,
+      monsterCap: this.currentMonsterCap(),
+      aliveHeroes: this.heroes.filter((h) => !h.dead).length,
       // OVERHAUL §3.1 + §3.4
       stratum: this._currentStratum ? {
         id: this._currentStratum.id,
@@ -5368,12 +5402,14 @@ export class GameEngine {
       `|${snap.paused ? 1 : 0}|${snap.speed}|${snap.autoReveal ? 1 : 0}|${snap.cardCost}` +
       `|${snap.bossActive ? 1 : 0}|${(snap.bossHp * 100) | 0}` +
       `|${snap.slotActive ? 1 : 0}|${snap.slotTripleReveal ? 1 : 0}` +
-      `|${snap.cardChoices ? snap.cardChoices.length : 0}` +
+      `|${snap.cardChoices ? snap.cardChoices.join(',') : '-'}` +
       `|${snap.pendingRelicChoices ? snap.pendingRelicChoices.length : 0}` +
       `|${snap.pendingEvent ? 1 : 0}|${snap.pendingRevival ? 1 : 0}` +
       `|${snap.waveBreakActive ? 1 : 0}|${snap.bonusWaveActive ? 1 : 0}` +
+      `|${snap.waveBreakUsed.heal ? 1 : 0}${snap.waveBreakUsed.mpRefill ? 1 : 0}${snap.waveBreakUsed.freespin ? 1 : 0}` +
       `|${(snap.rallyCdT * 10) | 0}|${(snap.rallyActiveT * 10) | 0}` +
-      `|${snap.aliveMonsters}|${snap.waveSpawned}|${snap.waveTotal}` +
+      `|${snap.aliveMonsters}/${snap.monsterCap}|${snap.aliveHeroes}|${snap.waveSpawned}|${snap.waveTotal}` +
+      `|${Math.floor(snap.mpRegenPerSec * 10)}` +
       `|${snap.synergies.length}|${snap.relics.length}` +
       `|${snap.heroNearCastle ? 1 : 0}|${snap.rerollAvailable ? 1 : 0}` +
       `|${snap.lockedCardId || '-'}|${snap.riskCardSlot ? snap.riskCardSlot.idx : -1}` +

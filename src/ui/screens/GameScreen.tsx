@@ -10,6 +10,7 @@ import { RELICS } from '../../game/data/relics';
 import { EVENTS } from '../../game/data/events';
 import * as Ait from '../../sdk/AitBridge';
 import { useSaveStore } from '../../store/useSaveStore';
+import { ENABLE_MONETIZATION } from '../../config/mvpFlags';
 
 interface GameScreenProps {
   onGameOver: (stats: GameOverStats) => void;
@@ -179,6 +180,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const engineRef = useRef<GameEngine | null>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
+  const stones = useSaveStore((s) => s.soulstones);
 
   const [snap, setSnap] = useState<any>({
     wave: 1, hp: 1000, hpMax: 1000, mp: 100, mpMax: 300,
@@ -359,6 +361,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const showDemonSpeech =
     !!snap.demonLine &&
     (snap.bossActive || snap.demonMood === 'urgent');
+  const monsterCap = snap.monsterCap ?? 14;
+  const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
+  const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
+  const waveBreakAffordable = {
+    heal: stones >= waveBreakCosts.heal,
+    mpRefill: stones >= waveBreakCosts.mpRefill,
+    freespin: stones >= waveBreakCosts.freespin,
+  };
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
@@ -583,12 +593,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           {snap.stage.icon ? `${snap.stage.icon} ` : ''}
           {snap.stage.name} · W{snap.wave}/{snap.stage.waveLimit}
           {typeof snap.deckSize === 'number' && (
-            <span style={styles.deckTag}>{' · 👹 '}{snap.deckSize}</span>
-          )}
-          {snap.stage.recommendedTags && snap.stage.recommendedTags.length > 0 && (
-            <span style={styles.stageTags}>
-              {' · 추천 '}{snap.stage.recommendedTags.join('/')}
-            </span>
+            <span style={styles.deckTag}>{' · 부하 '}{snap.deckSize}</span>
           )}
         </div>
       )}
@@ -677,7 +682,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 웨이브 진행도 (보스 아닐 때만) */}
       {!snap.bossActive && snap.waveTotal > 0 && (
         <div style={styles.waveProgress}>
-          <span style={styles.waveProgressLabel}>WAVE {snap.wave}</span>
+          <span style={styles.waveProgressLabel}>적 등장</span>
           <div style={styles.waveProgressBar}>
             <div
               style={{
@@ -687,7 +692,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             />
           </div>
           <span style={styles.waveProgressCount}>
-            {snap.waveSpawned}/{snap.waveTotal}
+            {snap.waveSpawned}/{snap.waveTotal} · 남음 {snap.aliveHeroes ?? 0}
           </span>
         </div>
       )}
@@ -716,8 +721,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 ? '봉인을 깨는 중...'
                 : snap.slotTripleReveal
                   ? '✨ 같은 카드 3장 — 희귀 발견 ✨'
-                  : (snap.aliveMonsters ?? 0) >= 14
-                    ? '⚠ 14/14 — 처치 후 다시 펼치기'
+                  : monsterFull
+                    ? `⚠ ${snap.aliveMonsters}/${monsterCap} — 처치 후 다시 펼치기`
                     : snap.autoReveal && snap.cardChoices
                       ? `🔁 자동 선택 ${(snap.autoPickT ?? 0).toFixed(1)}s`
                       : '운명의 카드 — 한 장을 선택하세요'}
@@ -799,11 +804,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   rarity === 'legendary' ? 'card-legendary' :
                   rarity === 'epic' ? 'card-epic' : '';
                 const rarityScale =
-                  rarity === 'legendary' ? 1.08 :
+                  rarity === 'legendary' ? 1.04 :
                   rarity === 'epic' ? 1.02 :
-                  rarity === 'rare' ? 1.0 :
-                  rarity === 'uncommon' ? 0.96 :
-                  0.92;  // common
+                  1.0;
 
                 const lockUnlockedRuns = (snap.runs ?? 0) >= 3;
                 const canLock = lockUnlockedRuns && snap.mp >= 50 && snap.lockedCardId !== id;
@@ -913,8 +916,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         <div style={styles.actionRow}>
           {(() => {
             const cantReveal = snap.mp < snap.cardCost;
+            const fieldFull = monsterFull && !snap.slotActive && !snap.cardChoices;
             const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu;
-            const disabled = cantReveal || busy;
+            const disabled = cantReveal || fieldFull || busy;
             const src = disabled
               ? '/sprites/btn_reveal_disabled.png'
               : '/sprites/btn_reveal_idle.png';
@@ -922,12 +926,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             const mpProgress = cantReveal
               ? Math.max(0, Math.min(1, snap.mp / snap.cardCost))
               : 1;
+            const missingMp = Math.max(0, snap.cardCost - snap.mp);
+            const waitSeconds = Math.ceil(missingMp / Math.max(0.5, snap.mpRegenPerSec ?? 2.4));
             return (
               <button
                 style={{
                   ...styles.btnReveal,
                   backgroundImage: `url("${src}")`,
-                  cursor: cantReveal ? 'not-allowed' : 'pointer',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
                   position: 'relative',
                 }}
                 onClick={() => eng()?.beginSpin()}
@@ -937,6 +943,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 <span style={styles.btnRevealTop}>
                   {snap.slotActive
                     ? '봉인 깨는 중...'
+                    : fieldFull
+                      ? '군단 가득 참'
                     : cantReveal
                       ? '마력 충전 중'
                       : '카드 펼치기'}
@@ -944,10 +952,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 <span style={styles.btnRevealSub}>
                   {snap.slotActive
                     ? '─'
+                    : fieldFull
+                      ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
                     : cantReveal
-                      ? `${snap.cardCost - snap.mp} 마력 더 (${Math.ceil((snap.cardCost - snap.mp) / 3.5)}초)`
-                      : (snap.cardRevealCount ?? 0) < 3
-                        ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/3)`
+                      ? `${missingMp} 마력 더 (약 ${waitSeconds}초)`
+                      : (snap.cardRevealCount ?? 0) < 2
+                        ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
                         : `🔮 ${snap.cardCost} 마력`}
                   {/* INPUT I-3: 잠긴 카드 표시 — 다음 펼치기 시 유지될 카드 명시 */}
                   {snap.lockedCardId && MONSTERS[snap.lockedCardId] && (
@@ -1153,56 +1163,67 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             <h2 style={styles.waveBreakTitle}>준비 단계</h2>
             <div style={styles.waveBreakSub}>
               다음 웨이브 — <b style={{ color: '#FFEAA7' }}>WAVE {snap.wave}</b><br />
-              <span style={{ color: '#888', fontSize: 11 }}>영혼석으로 강화 가능 (스킵 OK)</span>
+              <span style={{ color: '#888', fontSize: 11 }}>
+                보유 영혼석 {stones.toLocaleString()}개 · 스킵해도 진행 가능
+              </span>
             </div>
             <div style={styles.waveBreakActions}>
               <button
                 style={{
                   ...styles.wbAction,
-                  ...(snap.waveBreakUsed.heal ? styles.wbActionUsed : {}),
-                  ...(hpRatio < 0.5 ? styles.wbActionRecommend : {}),
+                  ...(snap.waveBreakUsed.heal || !waveBreakAffordable.heal ? styles.wbActionUsed : {}),
+                  ...(hpRatio < 0.5 && waveBreakAffordable.heal ? styles.wbActionRecommend : {}),
                 }}
                 onClick={() => eng()?.waveBreakHeal()}
-                disabled={snap.waveBreakUsed.heal}
+                disabled={snap.waveBreakUsed.heal || !waveBreakAffordable.heal}
               >
                 <div style={styles.wbIcon}>❤</div>
                 <div style={styles.wbBody}>
                   <div style={styles.wbName}>마왕성 +30% HP</div>
-                  {hpRatio < 0.5 && !snap.waveBreakUsed.heal && (
+                  {!waveBreakAffordable.heal && !snap.waveBreakUsed.heal ? (
+                    <div style={styles.wbTip}>영혼석 부족</div>
+                  ) : hpRatio < 0.5 && !snap.waveBreakUsed.heal && (
                     <div style={styles.wbTip}>💡 HP 50% 미만 — 추천</div>
                   )}
                 </div>
-                <div style={styles.wbCost}>💎 50</div>
+                <div style={styles.wbCost}>💎 {waveBreakCosts.heal}</div>
               </button>
               <button
                 style={{
                   ...styles.wbAction,
-                  ...(snap.waveBreakUsed.mpRefill ? styles.wbActionUsed : {}),
-                  ...(snap.mp < snap.cardCost ? styles.wbActionRecommend : {}),
+                  ...(snap.waveBreakUsed.mpRefill || !waveBreakAffordable.mpRefill ? styles.wbActionUsed : {}),
+                  ...(snap.mp < snap.cardCost && waveBreakAffordable.mpRefill ? styles.wbActionRecommend : {}),
                 }}
                 onClick={() => eng()?.waveBreakMpRefill()}
-                disabled={snap.waveBreakUsed.mpRefill}
+                disabled={snap.waveBreakUsed.mpRefill || !waveBreakAffordable.mpRefill}
               >
                 <div style={styles.wbIcon}>⚡</div>
                 <div style={styles.wbBody}>
                   <div style={styles.wbName}>마력 풀충전</div>
-                  {snap.mp < snap.cardCost && !snap.waveBreakUsed.mpRefill && (
+                  {!waveBreakAffordable.mpRefill && !snap.waveBreakUsed.mpRefill ? (
+                    <div style={styles.wbTip}>영혼석 부족</div>
+                  ) : snap.mp < snap.cardCost && !snap.waveBreakUsed.mpRefill && (
                     <div style={styles.wbTip}>💡 마력 부족 — 추천</div>
                   )}
                 </div>
-                <div style={styles.wbCost}>💎 30</div>
+                <div style={styles.wbCost}>💎 {waveBreakCosts.mpRefill}</div>
               </button>
               <button
-                style={{ ...styles.wbAction, ...(snap.waveBreakUsed.freespin ? styles.wbActionUsed : {}) }}
+                style={{
+                  ...styles.wbAction,
+                  ...(snap.waveBreakUsed.freespin || !waveBreakAffordable.freespin ? styles.wbActionUsed : {}),
+                }}
                 onClick={() => eng()?.waveBreakFreeSpin()}
-                disabled={snap.waveBreakUsed.freespin}
+                disabled={snap.waveBreakUsed.freespin || !waveBreakAffordable.freespin}
               >
                 <div style={styles.wbIcon}>🎴</div>
                 <div style={styles.wbBody}>
-                  <div style={styles.wbName}>즉시 카드 펼치기</div>
-                  <div style={styles.wbTip}>💡 빌드 강화 시 추천</div>
+                  <div style={styles.wbName}>무료 카드 준비</div>
+                  <div style={styles.wbTip}>
+                    {waveBreakAffordable.freespin ? '💡 다음 웨이브 전에 빌드 보강' : '영혼석 부족'}
+                  </div>
                 </div>
-                <div style={styles.wbCost}>💎 40</div>
+                <div style={styles.wbCost}>💎 {waveBreakCosts.freespin}</div>
               </button>
             </div>
             <button
@@ -1211,7 +1232,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 // P2-D: 인터스티셜 광고 (광고 제거 IAP 미구매 + runs >= 4 + 50% 확률)
                 const adsRemoved = useSaveStore.getState().iap.adsRemoved;
                 const userRuns = useSaveStore.getState().runs;
-                if (!adsRemoved && userRuns >= 4 && Math.random() < 0.5) {
+                if (ENABLE_MONETIZATION && !adsRemoved && userRuns >= 4 && Math.random() < 0.5) {
                   try { await Ait.showInterstitialAd(); } catch (e) {}
                 }
                 eng()?.waveBreakStart();
@@ -1944,7 +1965,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   waveProgressCount: {
     color: '#fff', fontSize: 9, fontWeight: 'bold',
-    textShadow: '1px 1px 0 #000', minWidth: 32, textAlign: 'right',
+    textShadow: '1px 1px 0 #000', minWidth: 76, textAlign: 'right',
   },
   bossTelegraph: {
     position: 'absolute', left: 8, right: 8, top: 102, zIndex: 8,
@@ -2004,7 +2025,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
   },
 
-  cards: { display: 'flex', gap: 6, marginBottom: 6, justifyContent: 'center' },
+  cards: { display: 'flex', gap: 5, marginBottom: 6, justifyContent: 'center' },
   rerollBtn: {
     display: 'block', margin: '0 auto 6px', padding: '7px 18px',
     background: 'linear-gradient(180deg,#a55eea,#3a0d4e)',
@@ -2015,7 +2036,8 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '1px 1px 0 #000',
   },
   card: {
-    flex: 1, padding: '8px 6px 14px', maxWidth: 116,
+    flex: 1, width: '100%', boxSizing: 'border-box',
+    padding: '7px 5px 12px', maxWidth: 106,
     background: 'linear-gradient(180deg,#2a1a4e 0%,#1a0e30 60%,#0d0620 100%)',
     border: '2px solid #4a3a6e', borderRadius: 7,
     color: '#fff', fontWeight: 'bold',
@@ -2023,7 +2045,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,
     transition: 'transform 0.1s',
     position: 'relative',
-    minHeight: 130,
+    minHeight: 124,
   },
   cardHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',

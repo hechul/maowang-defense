@@ -15,6 +15,7 @@ import { progressInLevel, calcRunExp } from '../../game/data/demonLevel';
 import { MICRO_LINES, pickMicroLine, pickDailyMicroLine } from '../../game/data/microLines';
 import { NPCS, pickNpcLine } from '../../game/data/npcs';
 import { AD_ENTRIES, getAdEntry } from '../../game/data/adRewards';
+import { ENABLE_MONETIZATION } from '../../config/mvpFlags';
 
 /**
  * ★ 작전 화면 — 사망 원인 추정 로직
@@ -140,13 +141,14 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
     if (!stats || oncePerStatsRef.current === stats) return;
     oncePerStatsRef.current = stats;
     // P0-1: 추가 EXP (recordRun에서 wave 베이스만 적립됨 → 여기서 buildBonus/discovery/victory 더하기)
+    const baseExp = Math.max(10, Math.floor((stats.wave ?? 0) * 8));
     const extra = calcRunExp({
       wave: stats.wave ?? 0,
-      bossKills: 0,  // recordRun에서 처리되지 않은 영역만 — bossKills는 addBossKill에서 별도
-      buildCompleted: !!(stats as any).buildTitleClaimed,
+      bossKills: stats.bossKills ?? 0,
+      buildCompleted: !!stats.buildCompleted,
       newDiscovered: 0,
-      isVictory: !!(stats as any).isVictory,
-    }) - Math.max(10, Math.floor((stats.wave ?? 0) * 8));
+      isVictory: !!stats.isVictory,
+    }) - baseExp;
     if (extra > 0) addDemonExp(extra);
     // P0-2: 시즌 XP 추가 (recordRun base는 wave*4+kills, 보너스로 +20)
     addSeasonXp(20);
@@ -458,16 +460,20 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
             <div style={echoStyles.npcBody}>{npcReactionRef.current.line}</div>
           </div>
         )}
-        {!adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && !adFreeFirstSessions && (
           <button style={styles.adBtn} onClick={handleAdDouble}>
             🎬 광고 보고 영혼석 ×2
           </button>
         )}
         {/* v11 추가 광고 옵션 — 일일 보너스 / 시즌 XP / 마왕 EXP / 우편 추가 */}
-        {!adFreeFirstSessions && (
+        {ENABLE_MONETIZATION && !adFreeFirstSessions && (
           <ResultAdOptions />
         )}
-        {adFreeFirstSessions && (
+        {!ENABLE_MONETIZATION ? (
+          <div style={styles.adFreeNotice}>
+            MVP 테스트 — 광고/과금 비활성화
+          </div>
+        ) : adFreeFirstSessions && (
           <div style={styles.adFreeNotice}>
             ✨ 신규 환영 — 첫 3런까지 광고 없음
           </div>

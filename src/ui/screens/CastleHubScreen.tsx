@@ -7,12 +7,13 @@ import type { ScreenId } from '../../App';
 
 interface Props {
   onNavigate: (s: ScreenId) => void;
+  onStartStage?: (stageId: string) => void;
 }
 
 /**
  * MVP 허브 — 정보량은 줄이되, 원본의 픽셀/마왕성 폼은 유지한다.
  */
-export function CastleHubScreen({ onNavigate }: Props) {
+export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
   const stones = useSaveStore((s) => s.soulstones);
   const bestWave = useSaveStore((s) => s.bestWave);
   const runs = useSaveStore((s) => s.runs);
@@ -40,6 +41,13 @@ export function CastleHubScreen({ onNavigate }: Props) {
   const nextBody = nextStage
     ? `웨이브 ${nextStage.waveLimit}까지 버티고 보스를 처치하세요.`
     : '모든 스테이지를 넘겼습니다. 더 깊은 웨이브에 도전하세요.';
+  const startPrimaryBattle = () => {
+    if (nextStage && onStartStage) {
+      onStartStage(nextStage.id);
+      return;
+    }
+    onNavigate('game');
+  };
 
   return (
     <div style={styles.root}>
@@ -70,9 +78,9 @@ export function CastleHubScreen({ onNavigate }: Props) {
       <button
         style={styles.cta}
         className="hub-cta-pulse"
-        onClick={() => onNavigate('game')}
+        onClick={startPrimaryBattle}
       >
-        <div style={styles.ctaTop}>바로 시작</div>
+        <div style={styles.ctaTop}>{nextStage ? '다음 스테이지' : '바로 시작'}</div>
         <div style={styles.ctaName}>⚔ 전투 시작</div>
         <div style={styles.ctaSub}>카드 3장 중 하나를 골라 마왕성을 지키세요</div>
       </button>
@@ -118,7 +126,7 @@ export function CastleHubScreen({ onNavigate }: Props) {
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          처음 목표는 단순합니다. <b>전투 시작</b>을 눌러 첫 보스를 막아보세요.
+          처음 목표는 단순합니다. <b>전투 시작</b>을 눌러 다음 스테이지를 바로 막아보세요.
         </div>
       )}
 

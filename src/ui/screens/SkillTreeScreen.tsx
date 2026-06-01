@@ -39,7 +39,7 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
     if (!confirm('모든 스킬을 초기화하고 영혼석을 환불받습니다. 계속?')) return;
     let refund = 0;
     for (const [id, rank] of Object.entries(skills) as [SkillId, number][]) {
-      for (let i = 0; i < rank; i++) refund += skillCost(id, i);
+      for (let i = 0; i < rank; i++) refund += skillCost(id, i, runs);
     }
     addStones(refund);
     resetSkills();

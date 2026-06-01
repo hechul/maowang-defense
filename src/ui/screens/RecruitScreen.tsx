@@ -39,10 +39,12 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
   const markTutorialSeen = useSaveStore((s) => s.markRecruitTutorialSeen);
   const [showTutorial, setShowTutorial] = useState(!tutorialSeen);
   const [toast, setToast] = useState<{ name: string; line: string } | null>(null);
+  const isRecruitUnlocked = (r: RecruitDefinition) =>
+    available.includes(r.monsterId) || !r.unlockStageId || cleared.includes(r.unlockStageId);
   // 진입 시 모집 가능 탭이 비어있으면 owned, 그것도 0이면 locked로 자동 선택
   const initialTab: RecruitTab = (() => {
     const hasAvailable = RECRUITS.some((r) =>
-      !recruited.includes(r.monsterId) && (!r.unlockStageId || cleared.includes(r.unlockStageId)));
+      !recruited.includes(r.monsterId) && isRecruitUnlocked(r));
     if (hasAvailable) return 'available';
     const hasOwned = recruited.length > 0;
     if (hasOwned) return 'owned';
@@ -65,9 +67,9 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
   const sorted = RECRUITS.slice().sort((a, b) => a.order - b.order);
   const ownedList = sorted.filter((r) => recruited.includes(r.monsterId));
   const availableList = sorted.filter((r) =>
-    !recruited.includes(r.monsterId) && (!r.unlockStageId || cleared.includes(r.unlockStageId)));
+    !recruited.includes(r.monsterId) && isRecruitUnlocked(r));
   const lockedList = sorted.filter((r) =>
-    !recruited.includes(r.monsterId) && r.unlockStageId && !cleared.includes(r.unlockStageId));
+    !recruited.includes(r.monsterId) && !isRecruitUnlocked(r));
 
   // 카드풀 — 모집된 + MONSTERS에 알려진 (현재 deck 크기)
   const deckSize = recruited.length;
@@ -82,8 +84,8 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
 
   const renderCard = (rec: RecruitDefinition) => {
     const owned = recruited.includes(rec.monsterId);
-    const isAvailable = available.includes(rec.monsterId);
-    const isLockedByStage = !!rec.unlockStageId && !cleared.includes(rec.unlockStageId);
+    const isAvailable = isRecruitUnlocked(rec);
+    const isLockedByStage = !isAvailable;
     const canRecruit = !owned && isAvailable && stones >= rec.cost.soulstones;
     const stonesShort = !owned && isAvailable && stones < rec.cost.soulstones
       ? rec.cost.soulstones - stones

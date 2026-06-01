@@ -129,18 +129,24 @@ export default function App() {
             }}
           />
         )}
-        {!showIntro && screen === 'castleHub' && <CastleHubScreen onNavigate={(s) => {
-          if ((s as string) === 'game') startEndless();
-          else setScreen(s);
-        }} />}
+        {!showIntro && screen === 'castleHub' && <CastleHubScreen
+          onStartStage={startStage}
+          onNavigate={(s) => {
+            if ((s as string) === 'game') startEndless();
+            else setScreen(s);
+          }}
+        />}
         {!showIntro && screen === 'privacy' && <PrivacyScreen onBack={goHub} />}
         {!showIntro && screen === 'support' && <SupportScreen onBack={goHub} />}
         <Suspense fallback={<LoadingScreen />}>
           {/* 옛 'title' 라우팅은 castleHub로 폴백 — TitleScreen은 데드코드 정리됨 */}
-          {screen === 'title' && <CastleHubScreen onNavigate={(s) => {
-            if ((s as string) === 'game') startEndless();
-            else setScreen(s);
-          }} />}
+          {screen === 'title' && <CastleHubScreen
+            onStartStage={startStage}
+            onNavigate={(s) => {
+              if ((s as string) === 'game') startEndless();
+              else setScreen(s);
+            }}
+          />}
           {screen === 'stageSelect' && <StageSelectScreen
             onBack={goHub}
             onStartStage={startStage}

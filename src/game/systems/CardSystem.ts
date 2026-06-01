@@ -58,7 +58,7 @@ export function resolveActivePool(
 export interface CardCostInput {
   /** 기본 비용 (현재 100) */
   baseCost: number;
-  /** 이번 런에서 카드 펼치기 횟수 — 초반 3회 50% 할인 트리거 */
+  /** 이번 런에서 카드 펼치기 횟수 — 초반 2회 온보딩 할인 트리거 */
   cardCount: number;
   /** 'pact' relic 보유 여부 — 30% 할인 */
   hasPactRelic: boolean;
@@ -73,7 +73,7 @@ export interface CardCostInput {
 /** 카드 펼치기 1회 비용. GameEngine.currentCardCost()에서 호출. */
 export function calculateCardCost(input: CardCostInput): number {
   let c = input.baseCost;
-  if (input.cardCount < 3) c *= 0.5;
+  if (input.cardCount < 2) c *= 0.55;
   if (input.cardCount >= 3) {
     c *= 1 + Math.min(0.7, (input.cardCount - 2) * 0.08);
   }
@@ -81,7 +81,7 @@ export function calculateCardCost(input: CardCostInput): number {
   c *= 1 - input.costSkillLevel * 0.05;
   c *= 1 - input.demonPowerCostReduction;
   if (input.challengeCostMul !== undefined) c *= input.challengeCostMul;
-  return Math.ceil(c);
+  return Math.ceil(c - 1e-6);
 }
 
 /* =====================================================================
