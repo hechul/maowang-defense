@@ -362,6 +362,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [showPauseSettings, setShowPauseSettings] = useState(false);
   const pauseMenuRequestedRef = useRef(false);
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
   const showDemonSpeech =
@@ -457,6 +458,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     if (blockingDecisionOpen || gameplayChoiceOpen) {
       pauseMenuRequestedRef.current = false;
       setShowPauseMenu(false);
+      setShowPauseSettings(false);
     }
   }, [blockingDecisionOpen, gameplayChoiceOpen]);
 
@@ -476,7 +478,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         (snap.tutorialQueue && snap.tutorialQueue.length > 0);
       if (e.key === 'Escape') {
         if (showQuitConfirm) { setShowQuitConfirm(false); e.preventDefault(); return; }
-        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); eng()?.setUserPause(false); e.preventDefault(); return; }
+        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); setShowPauseSettings(false); eng()?.setUserPause(false); e.preventDefault(); return; }
         if (modalActive) return;
         eng()?.setUserPause(true);
         pauseMenuRequestedRef.current = true;
@@ -492,7 +494,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         eng()?.rally();
         e.preventDefault();
       } else if (e.key === 'e' || e.key === 'E') {
-        eng()?.castUlti();
+        if (snap.ultiReady) eng()?.castUlti();
         e.preventDefault();
       }
     };
@@ -666,14 +668,6 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
       )}
 
-      {/* 스테이지 모드 — 진행도 라벨. 원본 캔버스 HUD와 겹치지 않도록 짧게 유지한다. */}
-      {snap.stage && !snap.bossActive && !snap.cardChoices && !snap.slotActive && (
-        <div style={styles.stageBadge}>
-          {snap.stage.icon ? `${snap.stage.icon} ` : ''}
-          {snap.stage.name} · W{snap.wave}/{snap.stage.waveLimit}
-        </div>
-      )}
-
       {/* OVERHAUL §3.1: 현재 던전 층 라벨 (스테이지 모드 아닐 때만 — endless) */}
       {!snap.stage && snap.stratum && !snap.bossActive && !snap.cardChoices && !snap.slotActive && (
         <div style={styles.stratumBadge}>
@@ -768,7 +762,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             />
           </div>
           <span style={styles.waveProgressCount}>
-            {snap.waveSpawned}/{snap.waveTotal} · 남음 {snap.aliveHeroes ?? 0}
+            {(snap.waveSpawned ?? 0) < snap.waveTotal && (snap.aliveHeroes ?? 0) === 0
+              ? `${snap.waveSpawned}/${snap.waveTotal} · 곧 침입`
+              : (snap.aliveHeroes ?? 0) === 0
+                ? `${snap.waveSpawned}/${snap.waveTotal} · 정리 중`
+              : `${snap.waveSpawned}/${snap.waveTotal} · 남음 ${snap.aliveHeroes ?? 0}`}
           </span>
         </div>
       )}
@@ -791,10 +789,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       <div style={styles.bottom}>
         {/* 카드 영역 — 봉인 중(face-down) → 카드 공개(flip) 통합 */}
         {!blockingDecisionOpen && !showPauseMenu && (snap.slotActive || snap.cardChoices) && (
-          <div style={styles.cardArea}>
-            <div style={styles.cardAreaLabel}>
-              {snap.slotActive
-                ? '봉인을 깨는 중...'
+            <div style={styles.cardArea}>
+              <div style={styles.cardAreaLabel}>
+                {snap.slotActive
+                ? '봉인을 깨는 중... 탭하면 즉시 공개'
                 : snap.slotTripleReveal
                   ? '✨ 같은 카드 3장 — 한 장 선택하세요'
                   : monsterFull
@@ -864,15 +862,19 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   )
                 );
 
-                // 역할 아이콘 (tags 기반 우선순위)
+                // 역할 아이콘 (tags 기반 우선순위). 첫 선택에서도 전술 차이가 보이도록 짧은 플레이 언어로 번역한다.
                 const role = (() => {
-                  if (!def) return { icon: '⚔', label: '근거리' };
-                  if (def.tags.includes('tank')) return { icon: '🛡', label: '탱커' };
-                  if (def.tags.includes('magic') && def.range > 60) return { icon: '🔮', label: '원거리' };
-                  if (def.tags.includes('support')) return { icon: '✦', label: '지원' };
-                  if (def.range > 60) return { icon: '🏹', label: '원거리' };
-                  if (def.tags.includes('brute')) return { icon: '💥', label: '광역' };
-                  return { icon: '⚔', label: '근거리' };
+                  if (!def) return { icon: '⚔', label: '공격', hint: '앞라인에서 막고 때립니다' };
+                  if (def.tags.includes('support')) return { icon: '✦', label: '지원', hint: '마력/버프로 판을 굴립니다' };
+                  if (def.tags.includes('tank') && (def.aoe || def.knockback)) return { icon: '💥', label: '제압', hint: '뭉친 적을 밀어냅니다' };
+                  if (def.tags.includes('tank')) return { icon: '🛡', label: '버팀', hint: '성 앞을 오래 버팁니다' };
+                  if (def.tags.includes('magic') && def.range > 60) return { icon: '🔮', label: '원거리', hint: '뒤에서 안전하게 녹입니다' };
+                  if (def.summonCount && def.summonCount > 1) return { icon: '☠', label: '물량', hint: '여러 마리로 라인을 채웁니다' };
+                  if (def.revive) return { icon: '♻', label: '부활', hint: '쓰러져도 다시 일어납니다' };
+                  if (def.range > 60) return { icon: '🏹', label: '원거리', hint: '멀리서 먼저 때립니다' };
+                  if (def.spd >= 22) return { icon: '⚔', label: '속공', hint: '빠르게 달려 시간을 벌어요' };
+                  if (def.tags.includes('brute')) return { icon: '💥', label: '광역', hint: '근거리에서 크게 압박합니다' };
+                  return { icon: '⚔', label: '전열', hint: '앞에서 적을 붙잡습니다' };
                 })();
 
                 // 등급별 시각 차이 — common 작게, legendary/epic 크고 펄스
@@ -921,6 +923,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       </div>
                     )}
                     <div style={styles.cardName}>{def?.name || id}</div>
+                    {isFirstCardReveal && (
+                      <div style={styles.cardRoleHint}>{role.hint}</div>
+                    )}
                     {!isFirstCardReveal && (
                       <div style={styles.cardStats}>
                         <span style={styles.cardStat}>HP {def?.hp ?? '?'}</span>
@@ -1011,6 +1016,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               <button
                 style={{
                   ...styles.btnReveal,
+                  ...(cantReveal || fieldFull ? styles.btnRevealMuted : {}),
                   backgroundImage: `url("${src}")`,
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   position: 'relative',
@@ -1019,7 +1025,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 disabled={disabled}
                 className={firstSpinPulse ? 'spin-pulse' : ''}
               >
-                <span style={styles.btnRevealTop}>
+                <span style={{
+                  ...styles.btnRevealTop,
+                  ...(cantReveal || fieldFull ? styles.btnRevealTopMuted : {}),
+                }}>
                   {snap.slotActive
                     ? '봉인 깨는 중...'
                     : fieldFull
@@ -1028,7 +1037,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       ? '마력 충전 중'
                       : '카드 펼치기'}
                 </span>
-                <span style={styles.btnRevealSub}>
+                <span style={{
+                  ...styles.btnRevealSub,
+                  ...(cantReveal || fieldFull ? styles.btnRevealSubMuted : {}),
+                }}>
                   {snap.slotActive
                     ? '─'
                     : fieldFull
@@ -1061,24 +1073,34 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               : snap.ultiGauge >= 0.5
                 ? '/sprites/btn_ulti_charging_50.png'
                 : '/sprites/btn_ulti_charging_0.png';
+            const showUltButton =
+              snap.ultiReady ||
+              snap.bossActive ||
+              snap.ultiGauge >= 0.35 ||
+              onboardingAdvancedUnlocked;
+            if (!showUltButton) return null;
             // 필살기 변형 — 0:어둠 파동(🌊) / 1:지옥 소환(🔥) / 2:암흑 멸망(💀)
             const variantIcons = ['🌊', '🔥', '💀'];
             const curIcon = variantIcons[snap.ultiVariant ?? 0];
             const nextIcon = variantIcons[snap.ultiNextVariant ?? 1];
+            const chargePct = Math.round((snap.ultiGauge ?? 0) * 100);
             return (
               <button
                 style={{
                   ...styles.btnUltiPng,
                   backgroundImage: `url("${ultiSrc}")`,
                   // FEEL F-3: disabled 상태 명확화 — opacity 0.55 + grayscale
-                  opacity: snap.ultiReady ? 1 : 0.55,
-                  filter: snap.ultiReady ? 'none' : 'grayscale(0.7)',
+                  opacity: snap.ultiReady ? 1 : 0.48,
+                  filter: snap.ultiReady ? 'none' : 'grayscale(0.8) brightness(0.78)',
                   position: 'relative',
+                  cursor: snap.ultiReady ? 'pointer' : 'not-allowed',
                 }}
-                onClick={() => eng()?.castUlti()}
-                // 충전 부족이라도 클릭 가능 → engine이 사유 배너 노출
+                onClick={() => {
+                  if (snap.ultiReady) eng()?.castUlti();
+                }}
+                disabled={!snap.ultiReady}
                 className={snap.ultiReady ? 'ulti-ready-pulse' : ''}
-                aria-label="필살기"
+                aria-label={snap.ultiReady ? '필살기 사용' : `필살기 충전 중 ${chargePct}%`}
               >
                 {/* 현재 변형 아이콘 — 좌상단 */}
                 <span style={{
@@ -1087,11 +1109,19 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   textShadow: '0 0 4px rgba(0,0,0,0.8)',
                 }}>{curIcon}</span>
                 {/* 다음 변형 아이콘 — 우상단 (작게, 흐리게) */}
-                <span style={{
-                  position: 'absolute', top: 3, right: 4,
-                  fontSize: 9, lineHeight: 1, opacity: 0.7,
-                  color: '#FFEAA7',
-                }}>→{nextIcon}</span>
+                {snap.ultiReady ? (
+                  <span style={{
+                    position: 'absolute', top: 3, right: 4,
+                    fontSize: 9, lineHeight: 1, opacity: 0.7,
+                    color: '#FFEAA7',
+                  }}>→{nextIcon}</span>
+                ) : (
+                  <span style={{
+                    position: 'absolute', top: 5, right: 5,
+                    fontSize: 8, lineHeight: 1, opacity: 0.85,
+                    color: '#bbb',
+                  }}>{chargePct}%</span>
+                )}
                 <div style={styles.btnUltiBar}>
                   <div style={{ ...styles.btnUltiBarFill, width: `${snap.ultiGauge * 100}%` }} />
                 </div>
@@ -1102,17 +1132,27 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
         {/* 컨트롤 row — 초반에는 Rally만, AUTO/속도는 숙련 도구로 단계 노출 */}
         <div style={styles.controlRow}>
+          {(() => {
+            const rallyDisabled = !snap.rallyReady || controlsBlocked || snap.aliveMonsters <= 0;
+            const rallyLabel = snap.aliveMonsters <= 0
+              ? '⚡ 부하 필요'
+              : !snap.rallyReady
+                ? `⚡ 돌격 ${snap.rallyCdT?.toFixed(1)}s`
+                : '⚡ 돌격';
+            return (
           <button
             style={{
               ...styles.miniBtn,
-              ...(snap.rallyReady ? styles.rallyBtnReady : styles.rallyBtnCool),
+              ...(!rallyDisabled ? styles.rallyBtnReady : styles.rallyBtnCool),
               flex: 2,
             }}
             onClick={() => eng()?.rally()}
-            disabled={!snap.rallyReady || controlsBlocked}
+            disabled={rallyDisabled}
           >
-            ⚡ 돌격{!snap.rallyReady && ` ${snap.rallyCdT?.toFixed(1)}s`}
+            {rallyLabel}
           </button>
+            );
+          })()}
           {showAssistControls && (
             <button
               style={{
@@ -1308,30 +1348,41 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               onClick={() => {
                 pauseMenuRequestedRef.current = false;
                 eng()?.setUserPause(false);
+                setShowPauseSettings(false);
                 setShowPauseMenu(false);
               }}
             >
               ▶ 게임 재개
             </button>
-            <div style={styles.pauseRow}>
-              <button
-                style={styles.pauseSubBtn}
-                onClick={() => eng()?.toggleAuto()}
-              >
-                🔁 AUTO {snap.autoReveal ? 'ON' : 'OFF'}
-              </button>
-              <button
-                style={styles.pauseSubBtn}
-                onClick={() => eng()?.toggleSpeed()}
-              >
-                ⏩ 속도 ×{snap.speed}
-              </button>
-            </div>
-            {/* A-1: 접근성 옵션 */}
-            <AccessibilityToggles />
+            <button
+              style={styles.pauseSettingsBtn}
+              onClick={() => setShowPauseSettings((v) => !v)}
+            >
+              {showPauseSettings ? '설정 접기' : '설정 열기'}
+            </button>
+            {showPauseSettings && (
+              <>
+                <div style={styles.pauseRow}>
+                  <button
+                    style={styles.pauseSubBtn}
+                    onClick={() => eng()?.toggleAuto()}
+                  >
+                    🔁 AUTO {snap.autoReveal ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    style={styles.pauseSubBtn}
+                    onClick={() => eng()?.toggleSpeed()}
+                  >
+                    ⏩ 속도 ×{snap.speed}
+                  </button>
+                </div>
+                {/* A-1: 접근성 옵션 */}
+                <AccessibilityToggles />
+              </>
+            )}
             <button
               style={styles.pauseQuitBtn}
-                onClick={() => setShowQuitConfirm(true)}
+              onClick={() => setShowQuitConfirm(true)}
             >
               ⏏ 포기하고 나가기
             </button>
@@ -1382,7 +1433,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       )}
 
       {/* 첫 카드 선택 직후 → 진화 안내 toast (TUT-B: tut_first_pick 모달이 학습 담당하므로 보조 toast로 격하) */}
-      {(snap.runs ?? 0) <= 1 && (snap.kills ?? 0) > 0 && (snap.kills ?? 0) <= 5 &&
+      {(snap.runs ?? 0) <= 1 && (snap.wave ?? 1) <= 2 && (snap.kills ?? 0) > 0 && (snap.kills ?? 0) <= 2 &&
         Object.values(snap.aliveCounts || {}).every((c: any) => c < 2) && !snap.cardChoices && !snap.slotActive && (
           <div style={styles.firstHint}>
             💡 같은 카드 3장을 모으면 <b>진화</b>합니다
@@ -1813,6 +1864,14 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
   },
   pauseRow: { display: 'flex', gap: 8, marginBottom: 10 },
+  pauseSettingsBtn: {
+    width: '100%', padding: '8px 12px',
+    background: 'rgba(20,12,42,0.45)',
+    border: '1px dashed #4a3a6e', borderRadius: 6,
+    color: '#bbb', fontSize: 11, fontWeight: 'bold',
+    fontFamily: 'inherit', cursor: 'pointer',
+    marginBottom: 10,
+  },
   pauseSubBtn: {
     flex: 1, padding: '10px 8px',
     background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
@@ -2087,6 +2146,17 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '1px 1px 0 #000',
     textAlign: 'center', margin: '2px 0 1px',
   },
+  cardRoleHint: {
+    fontSize: 8,
+    lineHeight: 1.35,
+    color: '#dfe6ff',
+    textAlign: 'center',
+    background: 'rgba(0,0,0,0.34)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 4,
+    padding: '3px 4px',
+    minHeight: 24,
+  },
   cardStar: { fontSize: 9, color: '#FDCB6E', textShadow: '1px 1px 0 #000' },
   cardStats: {
     display: 'flex', justifyContent: 'space-between',
@@ -2247,15 +2317,35 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 2,
     filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.65))',
   },
+  btnRevealMuted: {
+    opacity: 0.68,
+    filter: 'grayscale(0.45) brightness(0.78) drop-shadow(0 2px 4px rgba(0,0,0,0.55))',
+    transform: 'scale(0.98)',
+  },
   btnRevealTop: {
-    fontSize: 16, fontWeight: 'bold', letterSpacing: 3,
+    fontSize: 16, fontWeight: 'bold', letterSpacing: 2,
     textShadow: '0 0 10px #FDCB6E, 2px 2px 0 #000',
+  },
+  btnRevealTopMuted: {
+    fontSize: 13,
+    letterSpacing: 1.2,
+    color: '#cfc7d8',
+    textShadow: '1px 1px 0 #000',
   },
   btnRevealSub: {
     fontSize: 11, letterSpacing: 1, color: '#FFEAA7',
-    background: 'rgba(0,0,0,0.4)',
-    padding: '1px 9px', borderRadius: 9,
+    minWidth: 128,
+    background: 'rgba(7,4,18,0.72)',
+    border: '1px solid rgba(253,203,110,0.45)',
+    padding: '2px 10px', borderRadius: 10,
+    textAlign: 'center',
     textShadow: '1px 1px 0 #000',
+  },
+  btnRevealSubMuted: {
+    fontSize: 10,
+    color: '#d6cfe8',
+    borderColor: 'rgba(255,255,255,0.14)',
+    background: 'rgba(7,4,18,0.52)',
   },
   mpProgressBar: {
     position: 'absolute', left: 6, bottom: 4,

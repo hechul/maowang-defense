@@ -40,7 +40,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
   const upgradableSkills = useMemo(() => {
     let count = 0;
-    for (const id of Object.keys(SKILLS) as Array<keyof typeof SKILLS>) {
+    for (const id of ['cardCost', 'startMp', 'castleHp', 'monAtk', 'monHp'] as Array<keyof typeof SKILLS>) {
       const def = SKILLS[id];
       const rank = (skills as any)[id] ?? 0;
       if (rank >= def.max) continue;
@@ -113,9 +113,10 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
           <RoomTile
             icon="🏛"
             label="영혼 강화"
-            hint={upgradableSkills > 0 ? `${upgradableSkills}개 가능` : '영구 성장'}
-            badge={upgradableSkills > 0 ? '!' : null}
+            hint={upgradableSkills > 0 ? '강화 가능' : '영구 성장'}
+            badge={null}
             accent="#FDCB6E"
+            highlighted={upgradableSkills > 0}
             onClick={() => onNavigate('skills')}
           />
           <RoomTile
@@ -139,7 +140,11 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          처음 목표는 단순합니다. <b>다음 침공 막기</b>를 눌러 바로 막아보세요.
+          {upgradableSkills > 0 ? (
+            <>영혼석을 얻었습니다. <b>영혼 강화</b>에서 다음 침공을 준비해보세요.</>
+          ) : (
+            <>처음 목표는 단순합니다. <b>다음 침공 막기</b>를 눌러 바로 막아보세요.</>
+          )}
         </div>
       )}
 
@@ -159,12 +164,13 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
   );
 }
 
-function RoomTile({ icon, label, hint, badge, accent, onClick }: {
+function RoomTile({ icon, label, hint, badge, accent, highlighted, onClick }: {
   icon: string;
   label: string;
   hint: string;
   badge: string | null;
   accent: string;
+  highlighted?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -172,7 +178,10 @@ function RoomTile({ icon, label, hint, badge, accent, onClick }: {
       style={{
         ...styles.room,
         borderColor: accent,
-        boxShadow: `0 3px 0 #15102a, 0 0 6px ${accent}55`,
+        ...(highlighted ? styles.roomHighlighted : {}),
+        boxShadow: highlighted
+          ? `0 3px 0 #15102a, 0 0 14px ${accent}88`
+          : `0 3px 0 #15102a, 0 0 6px ${accent}55`,
       }}
       onClick={onClick}
     >
@@ -341,6 +350,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
+  },
+  roomHighlighted: {
+    background: 'linear-gradient(180deg,#4a351f,#1a1230)',
   },
   roomIcon: { fontSize: 24, lineHeight: 1, marginBottom: 4 },
   roomLabel: { fontSize: 11, fontWeight: 'bold', letterSpacing: 1, lineHeight: 1.35 },

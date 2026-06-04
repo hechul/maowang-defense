@@ -194,7 +194,7 @@ export function StageSelectScreen({ onBack, onStartStage, onStartEndless }: Prop
         )}
       </div>
       {showTut && (
-        <div style={styles.tutOverlay} onClick={() => { setShowTut(false); markTutSeen(); }}>
+        <div style={styles.tutOverlay}>
           <div style={styles.tutBox} onClick={(e) => e.stopPropagation()}>
             <div style={styles.tutIcon}>🗺</div>
             <div style={styles.tutTitle}>작전 지도</div>

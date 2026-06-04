@@ -549,7 +549,11 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
                 <div style={styles.recruitUnlockTop}>👹 새 부하가 성문 앞에서 대기 중!</div>
                 <div style={styles.recruitUnlockNames}>
                   {unlockIds
-                    .map((id) => getRecruitById(id)?.name ?? MONSTERS[id]?.name ?? id)
+                    .map((id) => {
+                      const rec = getRecruitById(id);
+                      const name = rec?.name ?? MONSTERS[id]?.name ?? id;
+                      return rec ? `${name} (💎${rec.cost.soulstones})` : name;
+                    })
                     .join(' · ')}
                 </div>
                 <div style={styles.recruitUnlockHint}>모집하면 카드풀에 등장합니다</div>

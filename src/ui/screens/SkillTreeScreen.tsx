@@ -3,7 +3,7 @@ import { useSaveStore, type SkillId } from '../../store/useSaveStore';
 import { SKILLS, TREE_INFO, skillCost } from '../../game/data/skilltree';
 import { Audio } from '../../audio/AudioEngine';
 
-const CORE_SKILLS: SkillId[] = ['castleHp', 'startMp', 'cardCost', 'monAtk', 'monHp'];
+const CORE_SKILLS: SkillId[] = ['cardCost', 'startMp', 'castleHp', 'monAtk', 'monHp'];
 
 export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
   const stones = useSaveStore((s) => s.soulstones);
@@ -62,6 +62,19 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
     : runs < 3
       ? (skills.cardCost < SKILLS.cardCost.max ? 'cardCost' : 'castleHp')
       : null;
+  const guideCopy = (() => {
+    if (highlightId && SKILLS[highlightId as SkillId]) {
+      const skill = SKILLS[highlightId as SkillId];
+      return {
+        top: '이번 결과에서 추천된 강화입니다',
+        text: `${skill.name}을 먼저 확인하세요. 방금 전투에서 부족했던 지점을 바로 보강합니다.`,
+      };
+    }
+    return {
+      top: '먼저 이 5개만 보면 됩니다',
+      text: '초반 추천은 카드 비용입니다. 카드를 자주 펼칠수록 전투 흐름을 더 빨리 익힙니다.',
+    };
+  })();
 
   const renderSkillNode = (id: SkillId, variant: 'core' | 'advanced') => {
     const sd = SKILLS[id];
@@ -118,8 +131,8 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
         <span style={styles.stonesNum}>{stones}</span>
       </div>
       <div style={styles.guideBox}>
-        <div style={styles.guideTop}>먼저 이 5개만 보면 됩니다</div>
-        <div style={styles.guideText}>초반 추천은 카드 비용입니다. 카드를 자주 펼칠수록 전투 흐름을 더 빨리 익힙니다.</div>
+        <div style={styles.guideTop}>{guideCopy.top}</div>
+        <div style={styles.guideText}>{guideCopy.text}</div>
       </div>
       <div style={styles.coreList}>
         {CORE_SKILLS.map((id) => renderSkillNode(id, 'core'))}
@@ -223,7 +236,7 @@ const styles: Record<string, React.CSSProperties> = {
   icon: { textAlign: 'center', fontSize: 20, lineHeight: 1, width: 26 },
   nodeTitle: { flex: 1, minWidth: 0 },
   nm: { fontSize: 12, fontWeight: 'bold', color: '#fff', lineHeight: 1.25 },
-  treeLabel: { fontSize: 8, letterSpacing: 2, marginTop: 2 },
+  treeLabel: { fontSize: 8, letterSpacing: 0.5, marginTop: 2 },
   rank: { fontSize: 10, color: '#FDCB6E', fontWeight: 'bold' },
   recommendBadge: {
     alignSelf: 'flex-start',

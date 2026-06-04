@@ -32,9 +32,9 @@ export const SKILLS: Record<SkillId, SkillDef> = {
 };
 
 export const TREE_INFO: Record<SkillTree, { name: string; color: string }> = {
-  rule:   { name: '지 배', color: '#74b9ff' },
-  summon: { name: '소 환', color: '#7bed9f' },
-  doom:   { name: '파 멸', color: '#FF7675' },
+  rule:   { name: '지배', color: '#74b9ff' },
+  summon: { name: '소환', color: '#7bed9f' },
+  doom:   { name: '파멸', color: '#FF7675' },
 };
 
 export function skillCost(id: SkillId, rank: number, runs: number = 999): number {

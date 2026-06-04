@@ -62,10 +62,22 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
 
         {/* stageModifier 경고 — 0 이상 차이 시만 */}
         {stage.stageModifier && (() => {
+          if (stage.id === 'ch1_s1' && !alreadyCleared) {
+            return (
+              <div style={styles.modCard}>
+                <span style={styles.modTop}>초보자 보정</span>
+                <div style={styles.modBody}>적이 약하고 마력 회복이 빠릅니다</div>
+              </div>
+            );
+          }
           const m = stage.stageModifier;
           const lines: string[] = [];
-          if (m.heroHpMul && m.heroHpMul !== 1) lines.push(`적 HP +${Math.round((m.heroHpMul - 1) * 100)}%`);
-          if (m.heroAtkMul && m.heroAtkMul !== 1) lines.push(`적 ATK +${Math.round((m.heroAtkMul - 1) * 100)}%`);
+          const pct = (label: string, mul: number) => {
+            const value = Math.round((mul - 1) * 100);
+            return `${label} ${value > 0 ? '+' : ''}${value}%`;
+          };
+          if (m.heroHpMul && m.heroHpMul !== 1) lines.push(pct('적 HP', m.heroHpMul));
+          if (m.heroAtkMul && m.heroAtkMul !== 1) lines.push(pct('적 ATK', m.heroAtkMul));
           if (m.mpRegenMul && m.mpRegenMul !== 1) lines.push(`마력 회복 ×${m.mpRegenMul.toFixed(2)}`);
           if (m.castleHpMul && m.castleHpMul !== 1) lines.push(`마왕성 +${Math.round((m.castleHpMul - 1) * 100)}%`);
           if (m.rewardMul && m.rewardMul !== 1) lines.push(`보상 ×${m.rewardMul.toFixed(2)}`);

@@ -857,7 +857,9 @@ export class GameEngine {
       this.speakDemon(pickDemonLine(DEMON_LINES_START));
       // A4 마왕 회상 — 1런마다 1개 (40% 확률)
       try {
-        if (Math.random() < 0.4) {
+        const runs = useSaveStore.getState().runs;
+        const showRecallIntro = this.runMode !== 'stage' || runs >= 2;
+        if (showRecallIntro && Math.random() < 0.4) {
           const seen = useSaveStore.getState().recallSeen;
           const recall = pickUnseenRecall(seen);
           if (recall) {
@@ -870,11 +872,17 @@ export class GameEngine {
       } catch (e) {}
     }, 1200);
     // OVERHAUL §3.6: 오늘의 칙령 안내 banner (2.4초 후)
-    this.safeTimeout(() => {
-      const e = this.todayEdictDef;
-      this.showBanner(`${e.icon} 오늘의 칙령 — ${e.name}`, e.desc, '#a55eea', 2.6);
-      this.flashEdge('#a55eea', 0.45);
-    }, 2400);
+    {
+      const runs = useSaveStore.getState().runs;
+      const showEdictIntro = this.runMode !== 'stage' || runs >= 2;
+      if (showEdictIntro) {
+        this.safeTimeout(() => {
+          const e = this.todayEdictDef;
+          this.showBanner(`${e.icon} 오늘의 칙령 — ${e.name}`, e.desc, '#a55eea', 2.6);
+          this.flashEdge('#a55eea', 0.45);
+        }, 2400);
+      }
+    }
     this.lastTime = performance.now();
     // BUG-007: 백그라운드 ↔ 포그라운드 전환 시 paused 자동 처리
     this._onVisibilityChange = () => {
@@ -1690,10 +1698,6 @@ export class GameEngine {
       this.flashScreen('#FDCB6E', 0.45);
       this.showBanner(`✨ ${def.name} 등장 ✨`, '용사를 막아라!', '#FDCB6E', 1.2);
       Ait.haptic('heavy');
-      // QA-9: 첫 소환 후 마력 회복 안내 (1.5초 지연 후)
-      this.safeTimeout(() => {
-        this.showBanner('💡 마력은 자동 회복', '용사를 처치하면 더 빠르게', '#a55eea', 2.0);
-      }, 2500);
     }
 
     // 등급별 임팩트 차별화
@@ -1801,7 +1805,11 @@ export class GameEngine {
     if (!isBoss) {
       this.flashEdge('#FF6B6B', 0.25);
       // W2 hero 첫 만남 — 한 줄 명대사 banner (런 안 1회)
-      if (!this._heroFirstSeen.has(typeId)) {
+      const suppressFirstStageLore =
+        this.runMode === 'stage' &&
+        useSaveStore.getState().runs < 2 &&
+        this.wave <= 2;
+      if (!suppressFirstStageLore && !this._heroFirstSeen.has(typeId)) {
         this._heroFirstSeen.add(typeId);
         const lore = getHeroLore(typeId);
         if (lore) {
@@ -3096,7 +3104,8 @@ export class GameEngine {
     if (allStopped && !this.slot.finished) {
       this.slot.finished = true;
       this.slot.active = false;
-      this.safeTimeout(() => this.finalizeSlot(), 380);
+      // MVP UX: 릴 종료 후 빈 하단 UI가 보이는 시간을 줄여 "눌렀는데 사라짐" 느낌을 방지한다.
+      this.safeTimeout(() => this.finalizeSlot(), 120);
     }
   }
 
@@ -3339,11 +3348,9 @@ export class GameEngine {
     return true;
   }
 
-  /** Tap-to-skip — 카드 공개 즉시 종료 (runs > 3 + 0.5초 경과 후만 허용) */
+  /** Tap-to-skip — 카드 공개 즉시 종료 (짧은 연출 시간 후 허용) */
   skipSlotReveal() {
     if (!this.slot.active) return;
-    const runs = useSaveStore.getState().runs;
-    if (runs <= 3) { Audio.ui_error(); return; }
     // 0.5초 경과 후만 (가장 마지막 reelStop이 1.1 → 0.6 이하면 허용)
     if (this.slot.reelStops[2] > 0.6) { Audio.ui_error(); return; }
     // 모든 릴 타이머 0 + 결과 위치로 점프

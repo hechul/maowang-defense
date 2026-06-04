@@ -10,7 +10,7 @@ interface Props {
 }
 
 type RecruitTab = 'available' | 'owned' | 'locked';
-const VISIBLE_TABS: RecruitTab[] = ['available', 'owned'];
+const VISIBLE_TABS: RecruitTab[] = ['available', 'owned', 'locked'];
 
 const TAB_LABELS: Record<RecruitTab, string> = {
   available: '모집 가능',
@@ -48,7 +48,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
     if (hasAvailable) return 'available';
     const hasOwned = recruited.length > 0;
     if (hasOwned) return 'owned';
-    return 'available';
+    return 'locked';
   })();
   const [tab, setTab] = useState<RecruitTab>(initialTab);
 
@@ -89,7 +89,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
     const stonesShort = !owned && isAvailable && stones < rec.cost.soulstones
       ? rec.cost.soulstones - stones
       : 0;
-    const isNew = isAvailable && !seen.includes(rec.monsterId);
+    const isNew = !owned && isAvailable && !seen.includes(rec.monsterId);
     const stageDef = rec.unlockStageId ? getStageById(rec.unlockStageId) : undefined;
 
     return (
@@ -163,7 +163,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
   return (
     <div style={styles.root}>
       {showTutorial && (
-        <div style={styles.tutOverlay} onClick={closeTutorial}>
+        <div style={styles.tutOverlay}>
           <div style={styles.tutBox} onClick={(e) => e.stopPropagation()}>
             <div style={styles.tutIcon}>👹</div>
             <div style={styles.tutTitle}>모집소</div>
@@ -233,6 +233,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
             새 스테이지를 클리어하면 모집 후보가 추가됩니다.
           </>)}
           {tab === 'owned' && '아직 모집한 몬스터가 없습니다.'}
+          {tab === 'locked' && '아직 소문조차 닿지 않은 부하가 없습니다.'}
         </div>
       ) : (
         <div style={styles.list}>{activeList.map(renderCard)}</div>

@@ -74,7 +74,7 @@ export interface CardCostInput {
 export function calculateCardCost(input: CardCostInput): number {
   let c = input.baseCost;
   if (input.cardCount < 2) c *= 0.65;
-  else if (input.cardCount === 2) c *= 0.9;
+  else if (input.cardCount === 2) c *= 0.8;
   else if (input.cardCount >= 3) {
     c *= 1 + Math.min(0.7, (input.cardCount - 3) * 0.08);
   }
@@ -189,6 +189,15 @@ export function createCardChoices(input: CreateChoicesInput): CreateChoicesResul
     lockApplied = true;
   } else {
     results = [input.pickFn(), input.pickFn(), input.pickFn()];
+  }
+
+  // 첫 선택은 "고르는 재미"가 핵심이다. 초반에는 가능한 한 3종 비교가 되도록 중복을 줄인다.
+  if (input.wave <= 2) {
+    for (let i = lockApplied ? 1 : 0; i < results.length; i++) {
+      for (let tries = 0; tries < 8 && results.slice(0, i).includes(results[i]); tries++) {
+        results[i] = input.pickFn();
+      }
+    }
   }
 
   // 동적 가중치 — 3회 이상 픽한 태그가 있으면 50% 확률로 슬롯 1/2 중 하나 교체
