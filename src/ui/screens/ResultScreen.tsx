@@ -286,8 +286,8 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       { id: 'castleHp' as const,  label: '마왕성 HP +10%' },
       { id: 'startMp' as const,   label: '시작 마력 +50' },
       { id: 'cardCost' as const,  label: '카드 펼치기 비용 -5%' },
-      { id: 'monAtk' as const,    label: '몬스터 공격력 +10%' },
-      { id: 'monHp' as const,     label: '몬스터 HP +10%' },
+      { id: 'monAtk' as const,    label: '몬스터 공격력 +5%' },
+      { id: 'monHp' as const,     label: '몬스터 HP +5%' },
     ];
     let cheapest: { id: any; label: string; cost: number; def: any; short: number } | null = null;
     for (const c of candidates) {
@@ -625,7 +625,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       })()}
 
       {/* ★ 추천 강화 카드 — 사망 원인에 따라 컨텍스트 변경 (강조판) */}
-      {recommendedUpgrade && !stageCleared && (!showMetaFlavor || showResultDetails) && (
+      {recommendedUpgrade && !stageCleared && (
         <div style={styles.recCard}>
           <div style={styles.recTop}>
             💡 추천 강화 — {SKILL_REASON[recommendedUpgrade.id] || '다음 런 보강'}
@@ -639,7 +639,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       )}
 
       {/* 영혼석 부족 시 다음 목표 표시 */}
-      {!recommendedUpgrade && upcomingUpgrade && !stageCleared && (!showMetaFlavor || showResultDetails) && (
+      {!recommendedUpgrade && upcomingUpgrade && !stageCleared && (
         <div style={styles.recCardLocked}>
           <div style={styles.recTop}>🎯 다음 목표</div>
           <div style={styles.recMain}>

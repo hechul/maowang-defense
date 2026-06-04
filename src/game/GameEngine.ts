@@ -93,7 +93,9 @@ import {
 const W = 360, H = 640;
 const FIELD = { x: 0, y: 78, w: W, h: H - 300 };
 const GROUND_Y = FIELD.y + FIELD.h - 40;
-const MONSTER_FRONT_X = W - 60;
+// 근접 부하가 적 진영 끝까지 밀고 올라가면 화면 밖으로 사라진 느낌이 강하다.
+// 전선을 살짝 왼쪽에 고정해 부하/용사 교전이 항상 보이게 한다.
+const MONSTER_FRONT_X = W - 105;
 const MONSTER_BACK_X = 70;
 const HERO_CASTLE_X = 80;
 const HERO_MAX_X = W + 24;
@@ -2910,6 +2912,7 @@ export class GameEngine {
       cost,
       castleHpPct: this.castleHp / this.castleMaxHp,
       aliveMonsterCount: aliveCount,
+      aliveHeroCount: this.heroes.filter((h) => !h.dead).length,
       emergencyUsedCount: this.emergencyRevealUsedCount,
       emergencyMaxUses: 1 + this.demonPower.emergencyRevealExtra,
     });
@@ -2921,7 +2924,7 @@ export class GameEngine {
         this.emergencyRevealUsed = true;
         this.emergencyRevealUsedCount++;
         isEmergency = true;
-        this.showBanner('⚡ 위급 자원!', '무료 카드 펼치기 (1회)', '#FDCB6E', 1.4);
+        this.showBanner('⚡ 라스트 찬스!', '무료 카드 펼치기 (1회)', '#FDCB6E', 1.4);
         Audio.relic_sfx();
       } else {
         Audio.ui_error();
@@ -3156,7 +3159,7 @@ export class GameEngine {
   private queueTutorial(id: string, title: string, body: string, icon?: string) {
     const seen = useSaveStore.getState().hasTutorialSeen(id);
     if (seen) return;
-    if (id.startsWith('tut_enemy_') || id === 'tut_boss_phase2') {
+    if (id.startsWith('tut_enemy_') || id === 'tut_boss_phase2' || id === 'tut_hp_danger') {
       useSaveStore.getState().markTutorialSeen(id);
       const oneLine = body.split('\n').find((line) => line.trim().length > 0) ?? '전투 중 대응하세요.';
       this.showBanner(title, oneLine.replace(/^💡\s*/, ''), icon === '💥' || icon === '⚠' ? '#FF6B6B' : '#FDCB6E', 1.2);
@@ -5152,7 +5155,7 @@ export class GameEngine {
   /**
    * ★ OverlayController 연동 — raw flag 스냅샷
    * 기존 상태 필드는 그대로 두고, 컨트롤러에 read-only로 넘긴다.
-   * pausedByUser는 명시 사용자 pause만 — overlay-induced paused는 별도 (현재 미구분, TODO).
+   * pausedByUser는 명시 사용자 pause만 — overlay-induced paused와 분리한다.
    */
   getOverlayFlags(): RawOverlayFlags {
     return {
@@ -5366,6 +5369,7 @@ export class GameEngine {
       ultiNextVariant: (this.ultiVariant + 1) % 3,
       waveBreakActive: this.waveBreakActive,
       waveBreakUsed: this.waveBreakUsed,
+      emergencyRevealUsed: this.emergencyRevealUsedCount > 0,
       lockedCardId: this.lockedCardId,
       tagPickCount: this.tagPickCount,
       tutorialQueue: this.tutorialQueue,
@@ -5463,6 +5467,7 @@ export class GameEngine {
       `|${snap.pendingRelicChoices ? snap.pendingRelicChoices.length : 0}` +
       `|${snap.pendingEvent ? 1 : 0}|${snap.pendingRevival ? 1 : 0}` +
       `|${snap.waveBreakActive ? 1 : 0}|${snap.bonusWaveActive ? 1 : 0}` +
+      `|${snap.emergencyRevealUsed ? 1 : 0}` +
       `|${snap.waveBreakUsed.heal ? 1 : 0}${snap.waveBreakUsed.mpRefill ? 1 : 0}${snap.waveBreakUsed.freespin ? 1 : 0}` +
       `|${(snap.rallyCdT * 10) | 0}|${(snap.rallyActiveT * 10) | 0}` +
       `|${snap.aliveMonsters}/${snap.monsterCap}|${snap.aliveHeroes}|${snap.waveSpawned}|${snap.waveTotal}` +

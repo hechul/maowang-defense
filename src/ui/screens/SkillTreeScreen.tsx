@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaveStore, type SkillId } from '../../store/useSaveStore';
 import { SKILLS, TREE_INFO, skillCost } from '../../game/data/skilltree';
 import { Audio } from '../../audio/AudioEngine';
@@ -14,6 +14,8 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
   const resetSkills = useSaveStore((s) => s.resetSkills);
   const addStones = useSaveStore((s) => s.addStones);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [recentUpgradeId, setRecentUpgradeId] = useState<SkillId | null>(null);
+  const recentUpgradeTimerRef = useRef<number | null>(null);
 
   // QA-6: hash로 전달된 추천 스킬 강조
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -32,12 +34,26 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
     }
   }, []);
 
+  useEffect(() => () => {
+    if (recentUpgradeTimerRef.current !== null) {
+      window.clearTimeout(recentUpgradeTimerRef.current);
+    }
+  }, []);
+
   const handleBuy = (id: SkillId) => {
     const rank = skills[id];
     const cost = skillCost(id, rank, runs);
     if (cost > stones) { Audio.ui_error(); return; }
     if (spendStones(cost)) {
       upgradeSkill(id);
+      setRecentUpgradeId(id);
+      if (recentUpgradeTimerRef.current !== null) {
+        window.clearTimeout(recentUpgradeTimerRef.current);
+      }
+      recentUpgradeTimerRef.current = window.setTimeout(() => {
+        setRecentUpgradeId((cur) => cur === id ? null : cur);
+        recentUpgradeTimerRef.current = null;
+      }, 2200);
       Audio.ui_confirm();
     }
   };
@@ -82,8 +98,10 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
     const cost = skillCost(sd.id, rank, runs);
     const maxed = rank >= sd.max;
     const canAfford = cost <= stones;
+    const short = Math.max(0, cost - stones);
     const isHighlight = highlightId === sd.id;
     const isGuided = guidedSkillId === sd.id && !maxed;
+    const isRecent = recentUpgradeId === sd.id;
     const treeColor = TREE_INFO[sd.tree].color;
     return (
       <button
@@ -96,11 +114,13 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
           ...(maxed ? styles.nodeMaxed : {}),
           ...(isGuided ? styles.nodeGuided : {}),
           ...(canAfford && !maxed ? styles.nodeAffordable : {}),
+          ...(!canAfford && !maxed ? styles.nodeUnaffordable : {}),
           ...(isHighlight ? styles.nodeHighlight : {}),
+          ...(isRecent ? styles.nodeRecent : {}),
         }}
         className={isHighlight ? 'skill-highlight' : ''}
-        onClick={() => !maxed && handleBuy(sd.id)}
-        disabled={maxed}
+        onClick={() => canAfford && !maxed && handleBuy(sd.id)}
+        disabled={maxed || !canAfford}
       >
         <div style={styles.nodeTop}>
           <div style={styles.icon}>{sd.icon}</div>
@@ -114,6 +134,12 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
           <div style={styles.recommendBadge}>
             {canAfford ? '지금 추천' : '다음 목표'}
           </div>
+        )}
+        {isRecent && (
+          <div style={styles.upgradedBadge}>강화 완료</div>
+        )}
+        {!isRecent && !maxed && !canAfford && (
+          <div style={styles.shortageBadge}>영혼석 {short} 부족</div>
         )}
         <div style={styles.desc}>{sd.desc(maxed ? rank : rank + 1)}</div>
         <div style={{ ...styles.cost, color: maxed ? '#FFEAA7' : (canAfford ? '#FDCB6E' : '#888') }}>
@@ -134,6 +160,11 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
         <div style={styles.guideTop}>{guideCopy.top}</div>
         <div style={styles.guideText}>{guideCopy.text}</div>
       </div>
+      {recentUpgradeId && SKILLS[recentUpgradeId] && (
+        <div style={styles.upgradeToast} role="status">
+          <b>{SKILLS[recentUpgradeId].name}</b> 강화 완료. 다음 침공에서 바로 체감해보세요.
+        </div>
+      )}
       <div style={styles.coreList}>
         {CORE_SKILLS.map((id) => renderSkillNode(id, 'core'))}
       </div>
@@ -150,7 +181,9 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
       )}
       <div style={styles.bottom}>
         {showAdvanced && <button style={styles.btn} onClick={handleReset}>초기화</button>}
-        <button style={{ ...styles.btn, ...styles.btnPrimary }} onClick={onBack}>돌아가기</button>
+        <button style={{ ...styles.btn, ...styles.btnPrimary }} onClick={onBack}>
+          {recentUpgradeId ? '마왕성으로 — 다음 침공' : '마왕성으로'}
+        </button>
       </div>
       <style>{`
         @keyframes skillHighlightPulse {
@@ -221,6 +254,11 @@ const styles: Record<string, React.CSSProperties> = {
   nodeAffordable: {
     boxShadow: '0 2px 0 #15102a, inset 0 0 10px rgba(253,203,110,0.12)',
   },
+  nodeUnaffordable: {
+    cursor: 'not-allowed',
+    opacity: 0.72,
+    filter: 'grayscale(0.25)',
+  },
   nodeGuided: {
     borderColor: '#FDCB6E',
     backgroundColor: 'rgba(253,203,110,0.12)',
@@ -229,6 +267,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: '#FDCB6E', borderWidth: 2,
     background: 'linear-gradient(180deg,#3a1a1a,#1a0606)',
     boxShadow: '0 0 14px rgba(253,203,110,0.7), inset 0 0 8px rgba(253,203,110,0.3)',
+  },
+  nodeRecent: {
+    borderColor: '#26de81',
+    boxShadow: '0 0 18px rgba(38,222,129,0.55), inset 0 0 10px rgba(38,222,129,0.16)',
   },
   nodeTop: {
     display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5,
@@ -248,6 +290,41 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     letterSpacing: 1,
     marginBottom: 5,
+  },
+  upgradedBadge: {
+    alignSelf: 'flex-start',
+    color: '#061b10',
+    background: '#26de81',
+    borderRadius: 4,
+    padding: '2px 6px',
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    marginBottom: 5,
+    boxShadow: '0 0 8px rgba(38,222,129,0.55)',
+  },
+  shortageBadge: {
+    alignSelf: 'flex-start',
+    color: '#d6cfe8',
+    background: 'rgba(0,0,0,0.34)',
+    border: '1px solid rgba(255,255,255,0.14)',
+    borderRadius: 4,
+    padding: '2px 6px',
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    marginBottom: 5,
+  },
+  upgradeToast: {
+    color: '#dfffea',
+    background: 'linear-gradient(180deg,rgba(38,222,129,0.18),rgba(9,132,227,0.12))',
+    border: '1px solid rgba(38,222,129,0.55)',
+    borderRadius: 6,
+    padding: '7px 10px',
+    fontSize: 10,
+    lineHeight: 1.45,
+    marginBottom: 8,
+    textShadow: '1px 1px 0 #000',
   },
   desc: { fontSize: 10, color: '#bbb', lineHeight: 1.35, minHeight: 0 },
   cost: {

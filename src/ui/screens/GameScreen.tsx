@@ -187,6 +187,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     kills: 0, combo: 0, cardChoices: null,
     ultiReady: false, ultiGauge: 0,
     paused: false, speed: 1, autoReveal: false, cardCost: 100,
+    emergencyRevealUsed: false,
     relics: [], synergies: [],
     bossActive: false, bossHp: 0, bossName: undefined,
     slotActive: false, slotTripleReveal: false,
@@ -376,6 +377,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     snap.autoReveal ||
     snap.speed !== 1;
   const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
+  const showRallyControl = showAssistControls || (snap.aliveMonsters ?? 0) > 0;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
@@ -610,7 +612,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         <>
           <div style={styles.castleWarn} />
           {/* QA M-4: 마력 부족 + 적 침투 시 ⚡돌격 추천 컨텍스트 힌트 */}
-          {snap.mp < snap.cardCost && snap.rallyReady && !snap.cardChoices && !snap.slotActive && (
+          {snap.mp < snap.cardCost && snap.rallyReady && (snap.aliveMonsters ?? 0) > 0 && !snap.cardChoices && !snap.slotActive && (
             <div style={styles.contextHint}>⚡ 돌격 추천</div>
           )}
         </>
@@ -1002,7 +1004,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             const cantReveal = snap.mp < snap.cardCost;
             const fieldFull = monsterFull && !snap.slotActive && !snap.cardChoices;
             const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu;
-            const disabled = cantReveal || fieldFull || busy;
+            const lastChanceReveal =
+              cantReveal &&
+              !snap.emergencyRevealUsed &&
+              (snap.aliveMonsters ?? 0) <= 0 &&
+              (snap.aliveHeroes ?? 0) > 0;
+            const disabled = (cantReveal && !lastChanceReveal) || fieldFull || busy;
+            const revealLooksMuted = (cantReveal && !lastChanceReveal) || fieldFull;
             const src = disabled
               ? '/sprites/btn_reveal_disabled.png'
               : '/sprites/btn_reveal_idle.png';
@@ -1016,7 +1024,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               <button
                 style={{
                   ...styles.btnReveal,
-                  ...(cantReveal || fieldFull ? styles.btnRevealMuted : {}),
+                  ...(revealLooksMuted ? styles.btnRevealMuted : {}),
+                  ...(lastChanceReveal ? styles.btnRevealEmergency : {}),
                   backgroundImage: `url("${src}")`,
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   position: 'relative',
@@ -1027,24 +1036,29 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               >
                 <span style={{
                   ...styles.btnRevealTop,
-                  ...(cantReveal || fieldFull ? styles.btnRevealTopMuted : {}),
+                  ...(revealLooksMuted ? styles.btnRevealTopMuted : {}),
+                  ...(lastChanceReveal ? styles.btnRevealTopEmergency : {}),
                 }}>
                   {snap.slotActive
                     ? '봉인 깨는 중...'
                     : fieldFull
                       ? '군단 가득 참'
+                    : lastChanceReveal
+                      ? '라스트 찬스'
                     : cantReveal
                       ? '마력 충전 중'
                       : '카드 펼치기'}
                 </span>
                 <span style={{
                   ...styles.btnRevealSub,
-                  ...(cantReveal || fieldFull ? styles.btnRevealSubMuted : {}),
+                  ...(revealLooksMuted ? styles.btnRevealSubMuted : {}),
                 }}>
                   {snap.slotActive
                     ? '─'
                     : fieldFull
                       ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
+                    : lastChanceReveal
+                      ? '무료 카드 1회'
                     : cantReveal
                       ? `${missingMp} 마력 더 (약 ${waitSeconds}초)`
                       : (snap.cardRevealCount ?? 0) < 2
@@ -1058,7 +1072,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   )}
                 </span>
                 {/* LD-16: 마력 충전 ring (하단) */}
-                {cantReveal && (
+                {cantReveal && !lastChanceReveal && (
                   <div style={{
                     ...styles.mpProgressBar,
                     width: `${mpProgress * 100}%`,
@@ -1130,70 +1144,76 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           })()}
         </div>
 
-        {/* 컨트롤 row — 초반에는 Rally만, AUTO/속도는 숙련 도구로 단계 노출 */}
-        <div style={styles.controlRow}>
-          {(() => {
-            const rallyDisabled = !snap.rallyReady || controlsBlocked || snap.aliveMonsters <= 0;
-            const rallyLabel = snap.aliveMonsters <= 0
-              ? '⚡ 부하 필요'
-              : !snap.rallyReady
-                ? `⚡ 돌격 ${snap.rallyCdT?.toFixed(1)}s`
-                : '⚡ 돌격';
-            return (
-          <button
-            style={{
-              ...styles.miniBtn,
-              ...(!rallyDisabled ? styles.rallyBtnReady : styles.rallyBtnCool),
-              flex: 2,
-            }}
-            onClick={() => eng()?.rally()}
-            disabled={rallyDisabled}
-          >
-            {rallyLabel}
-          </button>
-            );
-          })()}
-          {showAssistControls && (
-            <button
-              style={{
-                ...styles.miniBtn,
-                flex: 1,
-                background: snap.autoReveal
-                  ? 'linear-gradient(180deg,#26de81,#1a8048)'
-                  : 'rgba(45,27,78,0.85)',
-                color: snap.autoReveal ? '#fff' : '#bbb',
-                border: snap.autoReveal ? '2px solid #FDCB6E' : '1px solid #4a3a6e',
-              }}
-              onClick={() => {
-                if (!controlsBlocked) eng()?.toggleAuto();
-              }}
-              disabled={controlsBlocked}
-              aria-label="AUTO 토글"
-            >
-              🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
-            </button>
-          )}
-          {showAssistControls && (
-            <button
-              style={{
-                ...styles.miniBtn,
-                flex: 1,
-                background: snap.speed !== 1
-                  ? 'linear-gradient(180deg,#FDCB6E,#D63031)'
-                  : 'rgba(60,40,30,0.85)',
-                color: snap.speed !== 1 ? '#fff' : '#FDCB6E',
-                border: snap.speed !== 1 ? '2px solid #FDCB6E' : '1px solid #7a5a30',
-              }}
-              onClick={() => {
-                if (!controlsBlocked) eng()?.toggleSpeed();
-              }}
-              disabled={controlsBlocked}
-              aria-label="속도 토글"
-            >
-              ⏩ ×{snap.speed}
-            </button>
-          )}
-        </div>
+        {/* 컨트롤 row — 초반에는 쓸 수 없는 보조 행동을 숨겨 카드 CTA가 주인공이 되게 한다. */}
+        {showRallyControl && (
+          <div style={styles.controlRow}>
+            {showRallyControl && (() => {
+              const rallyDisabled = !snap.rallyReady || controlsBlocked || snap.aliveMonsters <= 0;
+              const rallyLabel = snap.aliveMonsters <= 0
+                ? '⚡ 부하 필요'
+                : !snap.rallyReady
+                  ? `⚡ 돌격 ${snap.rallyCdT?.toFixed(1)}s`
+                  : '⚡ 돌격';
+              return (
+                <button
+                  style={{
+                    ...styles.miniBtn,
+                    ...(!rallyDisabled ? styles.rallyBtnReady : styles.rallyBtnCool),
+                    flex: 2,
+                  }}
+                  onClick={() => eng()?.rally()}
+                  disabled={rallyDisabled}
+                >
+                  {rallyLabel}
+                </button>
+              );
+            })()}
+            {showAssistControls && (
+              <button
+                style={{
+                  ...styles.miniBtn,
+                  flex: 1,
+                  background: snap.autoReveal
+                    ? 'linear-gradient(180deg,#26de81,#1a8048)'
+                    : 'rgba(45,27,78,0.85)',
+                  color: snap.autoReveal ? '#fff' : '#bbb',
+                  borderWidth: snap.autoReveal ? 2 : 1,
+                  borderStyle: 'solid',
+                  borderColor: snap.autoReveal ? '#FDCB6E' : '#4a3a6e',
+                }}
+                onClick={() => {
+                  if (!controlsBlocked) eng()?.toggleAuto();
+                }}
+                disabled={controlsBlocked}
+                aria-label="AUTO 토글"
+              >
+                🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
+              </button>
+            )}
+            {showAssistControls && (
+              <button
+                style={{
+                  ...styles.miniBtn,
+                  flex: 1,
+                  background: snap.speed !== 1
+                    ? 'linear-gradient(180deg,#FDCB6E,#D63031)'
+                    : 'rgba(60,40,30,0.85)',
+                  color: snap.speed !== 1 ? '#fff' : '#FDCB6E',
+                  borderWidth: snap.speed !== 1 ? 2 : 1,
+                  borderStyle: 'solid',
+                  borderColor: snap.speed !== 1 ? '#FDCB6E' : '#7a5a30',
+                }}
+                onClick={() => {
+                  if (!controlsBlocked) eng()?.toggleSpeed();
+                }}
+                disabled={controlsBlocked}
+                aria-label="속도 토글"
+              >
+                ⏩ ×{snap.speed}
+              </button>
+            )}
+          </div>
+        )}
         </>
         )}
       </div>
@@ -1714,7 +1734,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '10px 12px',
     background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
-    border: '1px solid #4a3a6e', borderRadius: 7,
+    borderWidth: 1, borderStyle: 'solid', borderColor: '#4a3a6e', borderRadius: 7,
     color: '#FFEAA7', fontFamily: 'inherit', cursor: 'pointer',
     textAlign: 'left',
   },
@@ -2125,7 +2145,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1, width: '100%', boxSizing: 'border-box',
     padding: '7px 5px 12px', maxWidth: 106,
     background: 'linear-gradient(180deg,#2a1a4e 0%,#1a0e30 60%,#0d0620 100%)',
-    border: '2px solid #4a3a6e', borderRadius: 7,
+    borderWidth: 2, borderStyle: 'solid', borderColor: '#4a3a6e', borderRadius: 7,
     color: '#fff', fontWeight: 'bold',
     cursor: 'pointer', fontFamily: 'inherit',
     display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,
@@ -2237,7 +2257,7 @@ const styles: Record<string, React.CSSProperties> = {
   rarityLabel: {
     alignSelf: 'flex-start',
     fontSize: 8, fontWeight: 'bold',
-    border: '1px solid', borderRadius: 3,
+    borderWidth: 1, borderStyle: 'solid', borderColor: 'currentColor', borderRadius: 3,
     padding: '0 3px',
     margin: '2px 0',
     letterSpacing: 1,
@@ -2322,6 +2342,11 @@ const styles: Record<string, React.CSSProperties> = {
     filter: 'grayscale(0.45) brightness(0.78) drop-shadow(0 2px 4px rgba(0,0,0,0.55))',
     transform: 'scale(0.98)',
   },
+  btnRevealEmergency: {
+    opacity: 1,
+    filter: 'drop-shadow(0 0 12px rgba(255,107,107,0.7)) drop-shadow(0 4px 8px rgba(0,0,0,0.65))',
+    transform: 'scale(1.01)',
+  },
   btnRevealTop: {
     fontSize: 16, fontWeight: 'bold', letterSpacing: 2,
     textShadow: '0 0 10px #FDCB6E, 2px 2px 0 #000',
@@ -2332,11 +2357,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#cfc7d8',
     textShadow: '1px 1px 0 #000',
   },
+  btnRevealTopEmergency: {
+    color: '#FFEAA7',
+    fontSize: 15,
+    letterSpacing: 1.6,
+    textShadow: '0 0 10px #FF6B6B, 2px 2px 0 #000',
+  },
   btnRevealSub: {
     fontSize: 11, letterSpacing: 1, color: '#FFEAA7',
     minWidth: 128,
     background: 'rgba(7,4,18,0.72)',
-    border: '1px solid rgba(253,203,110,0.45)',
+    borderWidth: 1, borderStyle: 'solid', borderColor: 'rgba(253,203,110,0.45)',
     padding: '2px 10px', borderRadius: 10,
     textAlign: 'center',
     textShadow: '1px 1px 0 #000',
@@ -2382,7 +2413,7 @@ const styles: Record<string, React.CSSProperties> = {
   controlRow: { display: 'flex', gap: 10, marginTop: 6, justifyContent: 'flex-end' },
   miniBtn: {
     background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
-    border: '1px solid #4a3a6e',
+    borderWidth: 1, borderStyle: 'solid', borderColor: '#4a3a6e',
     color: '#FFEAA7', fontFamily: 'inherit', fontWeight: 'bold',
     fontSize: 10, padding: '4px 9px', borderRadius: 4, cursor: 'pointer',
     minWidth: 50, letterSpacing: 1,

@@ -11,9 +11,11 @@
 
 /**
  * 웨이브 내 spawn 간격(초). MVP는 초반 학습 공간을 위해 조금 느리게 시작한다.
+ * 1~3웨이브는 첫 판의 정보 과부하를 줄이기 위해 짧은 여유를 더한다.
  */
 export function calculateWaveSpawnInterval(wave: number): number {
-  return Math.max(1.05, 2.65 - wave * 0.06);
+  const firstWaveBuffer = Math.max(0, 4 - wave) * 0.12;
+  return Math.max(1.05, 2.65 - wave * 0.06 + firstWaveBuffer);
 }
 
 /**

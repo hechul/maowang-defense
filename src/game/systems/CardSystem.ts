@@ -535,6 +535,7 @@ export interface EmergencyRevealInput {
   cost: number;
   castleHpPct: number;          // castleHp / castleMaxHp
   aliveMonsterCount: number;
+  aliveHeroCount: number;
   emergencyUsedCount: number;
   /** 1 + demonPower.emergencyRevealExtra */
   emergencyMaxUses: number;
@@ -557,7 +558,8 @@ export function shouldGrantEmergencyReveal(input: EmergencyRevealInput): Emergen
   if (input.mp >= input.cost) return { hasEnoughMp: true, emergencyAllowed: false };
   const hpLow = input.castleHpPct < 0.2;
   const hpModerateAndFewEnemies = input.castleHpPct < 0.3 && input.aliveMonsterCount < 4;
-  const conditionOK = hpLow || hpModerateAndFewEnemies;
+  const noDefenders = input.aliveMonsterCount === 0 && input.aliveHeroCount > 0;
+  const conditionOK = hpLow || hpModerateAndFewEnemies || noDefenders;
   const usesAvailable = input.emergencyUsedCount < input.emergencyMaxUses;
   return {
     hasEnoughMp: false,

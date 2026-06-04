@@ -40,6 +40,7 @@ const FRAMES: { text: string; sub?: string; bg: string; icon: string; dur: numbe
 export function IntroCutscene({ onDone }: { onDone: () => void }) {
   const [frameIdx, setFrameIdx] = useState(0);
   const [fading, setFading] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   // BUG-009: onDone 1회만 호출되도록 ref 가드
   const doneRef = useRef(false);
   const fireDone = () => {
@@ -47,6 +48,10 @@ export function IntroCutscene({ onDone }: { onDone: () => void }) {
     doneRef.current = true;
     onDone();
   };
+
+  useEffect(() => {
+    rootRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (frameIdx >= FRAMES.length) {
@@ -67,15 +72,25 @@ export function IntroCutscene({ onDone }: { onDone: () => void }) {
 
   return (
     <div
+      ref={rootRef}
       style={{ ...styles.root, background: frame.bg }}
       onClick={fireDone}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+          e.preventDefault();
+          fireDone();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="인트로 건너뛰고 게임 시작"
     >
       <div style={{ ...styles.content, opacity: fading ? 0 : 1 }}>
         <div style={styles.icon}>{frame.icon}</div>
         <h1 style={styles.text}>{frame.text}</h1>
         {frame.sub && <div style={styles.sub}>{frame.sub}</div>}
       </div>
-      <div style={styles.skipHint}>탭하면 바로 시작 →</div>
+      <div style={styles.skipHint}>바로 시작</div>
       <div style={styles.progress}>
         {FRAMES.map((_, i) => (
           <div
@@ -98,6 +113,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
     cursor: 'pointer',
+    outline: 'none',
     transition: 'background 0.4s',
   },
   content: {
@@ -122,8 +138,21 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'pre-line',
   },
   skipHint: {
-    position: 'absolute', bottom: 20, right: 16,
-    color: '#666', fontSize: 11, letterSpacing: 1,
+    position: 'absolute',
+    bottom: 16,
+    right: 14,
+    color: '#0a0820',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    padding: '8px 10px',
+    background: 'linear-gradient(180deg,#FFEAA7,#FDCB6E)',
+    borderWidth: 2,
+    borderStyle: 'solid',
+    borderColor: '#7a3d12',
+    borderRadius: 6,
+    boxShadow: '0 3px 0 #3a1608, 0 0 12px rgba(253,203,110,0.45)',
+    textShadow: 'none',
   },
   progress: {
     position: 'absolute', bottom: 20, left: '50%',

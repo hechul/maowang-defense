@@ -48,6 +48,22 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
     }
     return count;
   }, [skills, stones, runs]);
+  const nextUpgradeShortage = useMemo(() => {
+    let shortage: number | null = null;
+    for (const id of ['cardCost', 'startMp', 'castleHp', 'monAtk', 'monHp'] as Array<keyof typeof SKILLS>) {
+      const def = SKILLS[id];
+      const rank = (skills as any)[id] ?? 0;
+      if (rank >= def.max) continue;
+      const need = Math.max(0, skillCost(id, rank, runs) - stones);
+      if (shortage === null || need < shortage) shortage = need;
+    }
+    return shortage ?? 0;
+  }, [skills, stones, runs]);
+  const upgradeHint = upgradableSkills > 0
+    ? `${upgradableSkills}개 강화 가능`
+    : nextUpgradeShortage > 0
+      ? `다음 강화까지 💎${nextUpgradeShortage}`
+      : '영구 성장';
 
   const startPrimaryBattle = () => {
     if (nextStage && onStartStage) {
@@ -78,7 +94,11 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         </div>
         <div style={styles.demonBubble}>
           <div style={styles.demonName}>— 마왕 <span style={styles.lvTag}>LV.{level}</span></div>
-          <div style={styles.demonText}>전투에서 영혼석을 모아 성을 강화하라.</div>
+          <div style={styles.demonText}>
+            {upgradableSkills > 0
+              ? '영혼 강화가 가능하다. 정비 후 침공을 막아라.'
+              : '전투에서 영혼석을 모아 성을 강화하라.'}
+          </div>
           <div style={styles.coreLoop}>전투 → 영혼석 → 강화 → 더 높은 웨이브</div>
         </div>
       </section>
@@ -113,8 +133,8 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
           <RoomTile
             icon="🏛"
             label="영혼 강화"
-            hint={upgradableSkills > 0 ? '강화 가능' : '영구 성장'}
-            badge={null}
+            hint={upgradeHint}
+            badge={upgradableSkills > 0 ? String(upgradableSkills) : null}
             accent="#FDCB6E"
             highlighted={upgradableSkills > 0}
             onClick={() => onNavigate('skills')}
@@ -141,7 +161,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
       {runs === 0 && (
         <div style={styles.firstHint}>
           {upgradableSkills > 0 ? (
-            <>영혼석을 얻었습니다. <b>영혼 강화</b>에서 다음 침공을 준비해보세요.</>
+            <>강화 가능한 영혼석이 있습니다. <b>영혼 강화</b>로 다음 침공을 준비해보세요.</>
           ) : (
             <>처음 목표는 단순합니다. <b>다음 침공 막기</b>를 눌러 바로 막아보세요.</>
           )}
@@ -338,7 +358,9 @@ const styles: Record<string, React.CSSProperties> = {
   room: {
     position: 'relative',
     background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',
-    border: '2px solid #4a3a6e',
+    borderWidth: 2,
+    borderStyle: 'solid',
+    borderColor: '#4a3a6e',
     borderRadius: 8,
     padding: '10px 4px',
     color: '#FFEAA7',
