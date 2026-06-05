@@ -26,6 +26,8 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
   const nextStage = recommendedNextStage(clearedStages);
   const level = progressInLevel(demonExp).level;
+  const isFirstVisit = runs === 0 && clearedStages.length === 0;
+  const showMapStrip = !isFirstVisit;
   const nextStageRewardText = nextStage ? (() => {
     const unlockNames = (nextStage.firstClearReward.unlockRecruitIds ?? [])
       .map((id) => getRecruitById(id)?.name ?? id);
@@ -95,7 +97,9 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         <div style={styles.demonBubble}>
           <div style={styles.demonName}>— 마왕 <span style={styles.lvTag}>LV.{level}</span></div>
           <div style={styles.demonText}>
-            {upgradableSkills > 0
+            {isFirstVisit
+              ? '먼저 첫 침공을 막아 전투 흐름을 익혀라.'
+              : upgradableSkills > 0
               ? '영혼 강화가 가능하다. 정비 후 침공을 막아라.'
               : '전투에서 영혼석을 모아 성을 강화하라.'}
           </div>
@@ -108,63 +112,69 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         className="hub-cta-pulse"
         onClick={startPrimaryBattle}
       >
-        <div style={styles.ctaTop}>{nextStage ? '다음 침공 막기' : '심연 방어전'}</div>
+        <div style={styles.ctaTop}>{isFirstVisit ? '첫 목표' : nextStage ? '다음 침공 막기' : '심연 방어전'}</div>
         <div style={styles.ctaName}>
-          {nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '⚔ 전투 시작'}
+          {isFirstVisit
+            ? '⚔ 바로 전투 시작'
+            : nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '⚔ 전투 시작'}
         </div>
         <div style={styles.ctaSub}>
-          {nextStage
+          {isFirstVisit
+            ? '카드 3장 중 하나를 골라 5웨이브만 막아보세요'
+            : nextStage
             ? nextStageRewardText
             : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
         </div>
       </button>
 
-      <section style={styles.mapStrip} aria-label="작전 지도">
-        <div style={styles.mapCopy}>
-          <div style={styles.mapLabel}>작전 지도</div>
-          <div style={styles.mapText}>열린 스테이지와 보상 확인</div>
-        </div>
-        <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>다른 스테이지</button>
-      </section>
+      {showMapStrip && (
+        <section style={styles.mapStrip} aria-label="작전 지도">
+          <div style={styles.mapCopy}>
+            <div style={styles.mapLabel}>작전 지도</div>
+            <div style={styles.mapText}>열린 스테이지와 보상 확인</div>
+          </div>
+          <button style={styles.mapBtn} onClick={() => onNavigate('stageSelect')}>다른 스테이지</button>
+        </section>
+      )}
 
       <section style={styles.roomSection} aria-label="핵심 메뉴">
-        <div style={styles.sectionLabel}>마왕성 내부</div>
-        <div style={styles.roomsGrid}>
+        <div style={styles.sectionLabel}>{isFirstVisit ? '전투 후 열리는 성장 메뉴' : '마왕성 내부'}</div>
+        <div style={isFirstVisit ? styles.roomsGridFirstVisit : styles.roomsGrid}>
           <RoomTile
             icon="🏛"
             label="영혼 강화"
-            hint={upgradeHint}
-            badge={upgradableSkills > 0 ? String(upgradableSkills) : null}
+            hint={isFirstVisit ? '전투 후 성장' : upgradeHint}
+            badge={!isFirstVisit && upgradableSkills > 0 ? String(upgradableSkills) : null}
             accent="#FDCB6E"
-            highlighted={upgradableSkills > 0}
+            highlighted={!isFirstVisit && upgradableSkills > 0}
             onClick={() => onNavigate('skills')}
           />
-          <RoomTile
-            icon="👹"
-            label="모집소"
-            hint={`부하 ${recruitedIds.length}종`}
-            badge={null}
-            accent="#26de81"
-            onClick={() => onNavigate('recruit')}
-          />
-          <RoomTile
-            icon="📖"
-            label="도감"
-            hint={`발견 ${discoveredMonsters.length}`}
-            badge={null}
-            accent="#a55eea"
-            onClick={() => onNavigate('bestiary')}
-          />
+          {!isFirstVisit && (
+            <>
+              <RoomTile
+                icon="👹"
+                label="모집소"
+                hint={`부하 ${recruitedIds.length}종`}
+                badge={null}
+                accent="#26de81"
+                onClick={() => onNavigate('recruit')}
+              />
+              <RoomTile
+                icon="📖"
+                label="도감"
+                hint={`발견 ${discoveredMonsters.length}`}
+                badge={null}
+                accent="#a55eea"
+                onClick={() => onNavigate('bestiary')}
+              />
+            </>
+          )}
         </div>
       </section>
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          {upgradableSkills > 0 ? (
-            <>강화 가능한 영혼석이 있습니다. <b>영혼 강화</b>로 다음 침공을 준비해보세요.</>
-          ) : (
-            <>처음 목표는 단순합니다. <b>다음 침공 막기</b>를 눌러 바로 막아보세요.</>
-          )}
+          <>처음 목표는 하나입니다. <b>바로 전투 시작</b>을 눌러 5웨이브만 막아보세요.</>
         </div>
       )}
 
@@ -355,6 +365,7 @@ const styles: Record<string, React.CSSProperties> = {
     paddingLeft: 2,
   },
   roomsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 },
+  roomsGridFirstVisit: { display: 'grid', gridTemplateColumns: '1fr', gap: 6 },
   room: {
     position: 'relative',
     background: 'linear-gradient(180deg,#3a2d5c,#1a1230)',

@@ -338,6 +338,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const firstSpinPulse =
     (snap.runs ?? 0) <= 1 &&
     (snap.kills ?? 0) === 0 &&
+    (snap.cardRevealCount ?? 0) === 0 &&
+    (snap.aliveMonsters ?? 0) === 0 &&
     snap.mp >= snap.cardCost &&
     !snap.cardChoices &&
     !snap.slotActive &&
@@ -377,7 +379,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     snap.autoReveal ||
     snap.speed !== 1;
   const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
-  const showRallyControl = showAssistControls || (snap.aliveMonsters ?? 0) > 0;
+  const shouldSurfaceRally =
+    (snap.aliveMonsters ?? 0) > 0 &&
+    (
+      onboardingAdvancedUnlocked ||
+      (snap.wave ?? 1) >= 2 ||
+      (((snap.mp ?? 0) < (snap.cardCost ?? 0) || !!snap.heroNearCastle) && (snap.aliveHeroes ?? 0) > 0)
+    );
+  const showRallyControl = showAssistControls || shouldSurfaceRally;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
@@ -788,7 +797,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
       )}
 
-      <div style={styles.bottom}>
+      <div style={{ ...styles.bottom, ...(gameplayChoiceOpen ? styles.bottomChoiceOpen : {}) }}>
         {/* 카드 영역 — 봉인 중(face-down) → 카드 공개(flip) 통합 */}
         {!blockingDecisionOpen && !showPauseMenu && (snap.slotActive || snap.cardChoices) && (
             <div style={styles.cardArea}>
@@ -836,7 +845,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
         {!blockingDecisionOpen && !showPauseMenu && snap.cardChoices && (
           <>
-            <div style={styles.cards} className="cards-fade-in">
+            <div
+              style={{ ...styles.cards, ...(isFirstCardReveal ? styles.cardsFirstReveal : {}) }}
+              className="cards-fade-in"
+            >
               {snap.cardChoices.map((id: string, i: number) => {
                 const def = MONSTERS[id];
                 const rarity = def?.rarity || 'common';
@@ -896,6 +908,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     onPick={() => eng()?.chooseCard(i)}
                     style={{
                       ...styles.card,
+                      ...(isFirstCardReveal ? styles.cardFirstReveal : {}),
                       borderColor: evoImminent ? '#FDCB6E' : accent,
                       borderWidth: rarity === 'legendary' ? 3 : 2,
                       transform: `scale(${rarityScale})`,
@@ -908,7 +921,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                             : `0 0 8px ${accent}66, inset 0 0 6px ${accent}22, 0 3px 0 #15102a`,
                       animationDelay: `${0.05 + i * 0.1}s`,
                     }}
-                    className={`card-flip ${rarityClass}`}
+                    className={isFirstCardReveal ? rarityClass : `card-flip ${rarityClass}`}
                   >
                     <div style={styles.cardHeader}>
                       <span style={{ ...styles.cardRarity, color: accent }}>
@@ -1060,7 +1073,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     : lastChanceReveal
                       ? '무료 카드 1회'
                     : cantReveal
-                      ? `${missingMp} 마력 더 (약 ${waitSeconds}초)`
+                      ? (snap.aliveMonsters ?? 0) > 0
+                        ? `${missingMp} 마력 더 · 처치하면 회복`
+                        : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
                       : (snap.cardRevealCount ?? 0) < 2
                         ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
                         : `🔮 ${snap.cardCost} 마력`}
@@ -2104,6 +2119,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'linear-gradient(0deg, rgba(5,3,15,0.97) 0%, rgba(5,3,15,0.85) 70%, transparent)',
     zIndex: 10,
   },
+  bottomChoiceOpen: {
+    bottom: 54,
+    paddingTop: 8,
+    background: 'linear-gradient(0deg, rgba(5,3,15,0.98) 0%, rgba(5,3,15,0.9) 78%, transparent)',
+  },
   cardArea: {
     margin: '0 auto 4px',
     textAlign: 'center',
@@ -2132,6 +2152,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cards: { display: 'flex', gap: 5, marginBottom: 6, justifyContent: 'center' },
+  cardsFirstReveal: {
+    gap: 4,
+    alignItems: 'stretch',
+  },
   rerollBtn: {
     display: 'block', margin: '0 auto 6px', padding: '7px 18px',
     background: 'linear-gradient(180deg,#a55eea,#3a0d4e)',
@@ -2152,6 +2176,12 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'transform 0.1s',
     position: 'relative',
     minHeight: 124,
+  },
+  cardFirstReveal: {
+    maxWidth: 98,
+    minHeight: 108,
+    padding: '6px 4px 8px',
+    gap: 2,
   },
   cardHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',

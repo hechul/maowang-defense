@@ -1217,6 +1217,16 @@ export class GameEngine {
       return;
     }
     if (this.waveSpawned < this.waveTotal) {
+      const shouldWaitForFirstCard =
+        useSaveStore.getState().runs <= 1 &&
+        this.wave === 1 &&
+        (this.cardRevealCount === 0 || !!this.cardChoices || this.slot.active) &&
+        this.monsters.filter((m) => !m.dead).length === 0;
+      if (shouldWaitForFirstCard) {
+        // First-time players should pick a first monster before enemies pressure them.
+        this.waveTimer = Math.max(this.waveTimer, 0.6);
+        return;
+      }
       this.waveTimer -= dt;
       if (this.waveTimer <= 0) {
         // WaveSystem: 동시 hero 수 cap
@@ -2914,7 +2924,7 @@ export class GameEngine {
       aliveMonsterCount: aliveCount,
       aliveHeroCount: this.heroes.filter((h) => !h.dead).length,
       emergencyUsedCount: this.emergencyRevealUsedCount,
-      emergencyMaxUses: 1 + this.demonPower.emergencyRevealExtra,
+      emergencyMaxUses: this.currentEmergencyRevealMaxUses(),
     });
     let isEmergency = false;
     if (opts.free) {
@@ -2924,7 +2934,7 @@ export class GameEngine {
         this.emergencyRevealUsed = true;
         this.emergencyRevealUsedCount++;
         isEmergency = true;
-        this.showBanner('⚡ 라스트 찬스!', '무료 카드 펼치기 (1회)', '#FDCB6E', 1.4);
+        this.showBanner('⚡ 라스트 찬스!', '위기 무료 카드 펼치기', '#FDCB6E', 1.4);
         Audio.relic_sfx();
       } else {
         Audio.ui_error();
@@ -3666,6 +3676,10 @@ export class GameEngine {
 
   /* ===== Helpers ===== */
   private addMP(amt: number) { this.mp = Math.min(this.mpMax, this.mp + amt); }
+  private currentEmergencyRevealMaxUses() {
+    const newbieBonus = useSaveStore.getState().runs <= 1 ? 3 : 0;
+    return 1 + this.demonPower.emergencyRevealExtra + newbieBonus;
+  }
   private _lastShakeAt = 0;
   private shakeFx(amt: number) {
     // A-1: 접근성 reduceMotion → shake 비활성
@@ -5369,7 +5383,7 @@ export class GameEngine {
       ultiNextVariant: (this.ultiVariant + 1) % 3,
       waveBreakActive: this.waveBreakActive,
       waveBreakUsed: this.waveBreakUsed,
-      emergencyRevealUsed: this.emergencyRevealUsedCount > 0,
+      emergencyRevealUsed: this.emergencyRevealUsedCount >= this.currentEmergencyRevealMaxUses(),
       lockedCardId: this.lockedCardId,
       tagPickCount: this.tagPickCount,
       tutorialQueue: this.tutorialQueue,
