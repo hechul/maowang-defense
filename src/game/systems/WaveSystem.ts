@@ -14,8 +14,11 @@
  * 1~3웨이브는 첫 판의 정보 과부하를 줄이기 위해 짧은 여유를 더한다.
  */
 export function calculateWaveSpawnInterval(wave: number): number {
-  const firstWaveBuffer = Math.max(0, 4 - wave) * 0.12;
-  return Math.max(1.05, 2.65 - wave * 0.06 + firstWaveBuffer);
+  const firstWaveBuffer = Math.max(0, 4 - wave) * 0.15;
+  // 1차 테스트에서 너무 촘촘한 웨이브 진행감이 들어왔다. 반응 시간 0.25~0.4초 정도 벌려
+  // 난이도는 유지하면서 체감 템포가 덜 급하게 느껴지도록 완화한다.
+  const base = 3.55;
+  return Math.max(1.25, base - wave * 0.035 + firstWaveBuffer);
 }
 
 /**
@@ -24,10 +27,10 @@ export function calculateWaveSpawnInterval(wave: number): number {
  * 기존: wave >= 20 ? 18 : wave >= 10 ? 14 : 99
  */
 export function calculateLiveHeroCap(wave: number): number {
-  if (wave >= 20) return 18;
-  if (wave >= 10) return 14;
-  if (wave >= 5) return 9;
-  return 6;
+  if (wave >= 20) return 14;
+  if (wave >= 10) return 11;
+  if (wave >= 5) return 7;
+  return 5;
 }
 
 /** 5웨이브마다 보스. 1, 6, 11, ... wave는 보스 웨이브가 아님. */

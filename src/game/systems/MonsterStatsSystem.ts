@@ -14,11 +14,13 @@ export interface MonsterMaxInput {
 
 /** 동시 배치 가능한 최대 몬스터 수. */
 export function calculateMonsterMax(input: MonsterMaxInput): number {
-  const base = input.challengeMaxMonsters ?? 14;
+  const base = input.challengeMaxMonsters ?? 12;
   return base + (input.hasSwarmRelic ? 2 : 0);
 }
 
 export interface MonsterStatsInput {
+  /** 현재 웨이브 (난이도 곡선용) */
+  wave: number;
   /** 챌린지 monsterHpMul */
   challengeHpMul: number;
   /** 'iron' relic — HP ×1.15 */
@@ -41,15 +43,22 @@ export interface MonsterStatsResult {
 
 /**
  * 몬스터 spawn 시 스탯 멀티 산출.
- *   hpMul  = challengeHpMul × (iron ? 1.15 : 1)
- *   atkMul = wrath ? 1.20 : 1
- *   spdMul = sprint ? 1.20 : 1
+ *   hpMul  = challengeHpMul × waveHpScale × (iron ? 1.15 : 1)
+ *   atkMul = waveAtkScale × (wrath ? 1.20 : 1)
+ *   spdMul = waveSpdScale × (sprint ? 1.20 : 1)
+ *   waveHpScale = 1 + min(0.42, (wave - 1) × 0.018)
+ *   waveAtkScale= 1 + min(0.28, (wave - 1) × 0.012)
+ *   waveSpdScale= 1 + min(0.22, (wave - 1) × 0.008)
  *   atkSpdDivisor = razor ? 1.15 : 1
  */
 export function calculateMonsterStats(input: MonsterStatsInput): MonsterStatsResult {
-  const hpMul = input.challengeHpMul * (input.hasIronRelic ? 1.15 : 1);
-  const atkMul = input.hasWrathRelic ? 1.20 : 1;
-  const spdMul = input.hasSprintRelic ? 1.20 : 1;
+  const wave = Math.max(1, input.wave || 1);
+  const waveHpScale = 1 + Math.min(0.5, (wave - 1) * 0.018);
+  const waveAtkScale = 1 + Math.min(0.36, (wave - 1) * 0.012);
+  const waveSpdScale = 1 + Math.min(0.22, (wave - 1) * 0.007);
+  const hpMul = input.challengeHpMul * waveHpScale * (input.hasIronRelic ? 1.15 : 1);
+  const atkMul = waveAtkScale * (input.hasWrathRelic ? 1.20 : 1);
+  const spdMul = waveSpdScale * (input.hasSprintRelic ? 1.20 : 1);
   const atkSpdDivisor = input.hasRazorRelic ? 1.15 : 1;
   return { hpMul, atkMul, spdMul, atkSpdDivisor };
 }

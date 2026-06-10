@@ -366,7 +366,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [showPauseSettings, setShowPauseSettings] = useState(false);
-  const pauseMenuRequestedRef = useRef(false);
+  const userPaused = !!(snap as any).userPaused;
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
   const showDemonSpeech =
     !!snap.demonLine &&
@@ -375,20 +375,58 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     (snap.runs ?? 0) >= 2 ||
     (snap.stage ? snap.stage.index > 1 : true);
   const showAssistControls =
-    (onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3) ||
     snap.autoReveal ||
-    snap.speed !== 1;
+    snap.speed !== 1 ||
+    (onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3);
   const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
   const shouldSurfaceRally =
     (snap.aliveMonsters ?? 0) > 0 &&
     (
-      onboardingAdvancedUnlocked ||
-      (snap.wave ?? 1) >= 2 ||
-      (((snap.mp ?? 0) < (snap.cardCost ?? 0) || !!snap.heroNearCastle) && (snap.aliveHeroes ?? 0) > 0)
+      snap.rallyReady ||
+      snap.rallyActiveT > 0 ||
+      snap.heroNearCastle ||
+      !!(snap.bossActive && snap.aliveHeroes && snap.aliveHeroes > 0)
     );
-  const showRallyControl = showAssistControls || shouldSurfaceRally;
+  const showRallyControl = shouldSurfaceRally || snap.rallyActiveT > 0;
+  const showControlRow = showRallyControl || showAssistControls;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
+  const topHeaderMissions = (snap.activeMissions || []) as any[];
+  const topMission = (() => {
+    const best = topHeaderMissions
+      .filter(Boolean)
+      .map((m: any) => {
+        const def = MISSION_POOL.find((x) => x.id === m.id);
+        if (!def) return null;
+        if ((m.progress ?? 0) >= def.target) return null;
+        const ratio = def.target > 0 ? (m.progress ?? 0) / def.target : 0;
+        return { m, def, ratio };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.ratio - a.ratio)[0] as any;
+    if (!best) return null;
+    return `${best.def.icon} ${best.def.name} ${best.m.progress ?? 0}/${best.def.target}`;
+  })();
+  const topHeaderText = (() => {
+    if (snap.challengeId && CHALLENGES[snap.challengeId]) {
+      return `🏆 ${CHALLENGES[snap.challengeId].name}`;
+    }
+    if (snap.stage?.name) {
+      return `🗝 ${snap.stage.name}`;
+    }
+    if (snap.stratum) {
+      return `🏛 ${snap.stratum.index}층`;
+    }
+    return `🛡 웨이브 ${snap.wave}`;
+  })();
+  const waveBalanceText = (() => {
+    if (snap.waveSpawned == null || !snap.waveTotal) return null;
+    if (snap.waveSpawned >= snap.waveTotal && snap.aliveHeroes === 0) return `진행중`;
+    if (snap.aliveHeroes === 0) return `${snap.waveSpawned}/${snap.waveTotal} · 곧 생성`;
+    return `${snap.waveSpawned}/${snap.waveTotal} · 적 ${snap.aliveHeroes}`;
+  })();
+  const topMissionText = snap.gameMode === 'daily' && topMission ? `📜 ${topMission}` : null;
+  const showTopSummary = !isFirstCardReveal && !gameplayChoiceOpen && !snap.cardChoices && !snap.slotActive;
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
   const waveBreakAffordable = {
@@ -466,12 +504,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
   // 재개 메뉴는 사용자가 ⏸/Esc를 누른 경우에만 열고, 강제 모달 진입 시에는 닫기만 한다.
   useEffect(() => {
-    if (blockingDecisionOpen || gameplayChoiceOpen) {
-      pauseMenuRequestedRef.current = false;
-      setShowPauseMenu(false);
-      setShowPauseSettings(false);
+    if (userPaused) {
+      setShowPauseMenu(true);
+      return;
     }
-  }, [blockingDecisionOpen, gameplayChoiceOpen]);
+    setShowPauseMenu(false);
+    setShowPauseSettings(false);
+  }, [userPaused]);
 
   // INPUT I-1: PC 키보드 단축키 (모바일은 영향 없음)
   // Space=카드 펼치기 / Q=Rally / E=필살기 / Esc=일시정지
@@ -489,10 +528,15 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         (snap.tutorialQueue && snap.tutorialQueue.length > 0);
       if (e.key === 'Escape') {
         if (showQuitConfirm) { setShowQuitConfirm(false); e.preventDefault(); return; }
-        if (showPauseMenu) { pauseMenuRequestedRef.current = false; setShowPauseMenu(false); setShowPauseSettings(false); eng()?.setUserPause(false); e.preventDefault(); return; }
+        if (showPauseMenu) {
+          setShowPauseMenu(false);
+          setShowPauseSettings(false);
+          eng()?.setUserPause(false);
+          e.preventDefault();
+          return;
+        }
         if (modalActive) return;
         eng()?.setUserPause(true);
-        pauseMenuRequestedRef.current = true;
         setShowPauseMenu(true);
         e.preventDefault();
         return;
@@ -513,7 +557,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     return () => window.removeEventListener('keydown', onKey);
   }, [snap.cardChoices, snap.slotActive, snap.pendingRelicChoices, snap.pendingEvent,
       snap.pendingRevival, snap.waveBreakActive, snap.tutorialQueue, snap.paused,
-      showPauseMenu, showQuitConfirm]);
+      snap.userPaused, showPauseMenu, showQuitConfirm]);
 
   // 부활 모달 10초 자동 종료 — BUG-002: 광고 시청 중일 때는 일시정지
   const [revivalAdLoading, setRevivalAdLoading] = useState(false);
@@ -643,7 +687,6 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             onClick={() => {
               if (modalActive) return;
               eng()?.setUserPause(true);
-              pauseMenuRequestedRef.current = true;
               setShowPauseMenu(true);
             }}
             disabled={modalActive}
@@ -679,41 +722,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
       )}
 
-      {/* OVERHAUL §3.1: 현재 던전 층 라벨 (스테이지 모드 아닐 때만 — endless) */}
-      {!snap.stage && snap.stratum && !snap.bossActive && !snap.cardChoices && !snap.slotActive && (
-        <div style={styles.stratumBadge}>
-          🏛 {snap.stratum.index}층 — {snap.stratum.name}
+      {/* QO Q-1: 상단 진행 요약 한 줄 — 다중 라벨 스택 제거 */}
+      {showTopSummary && !snap.bossActive && (
+        <div style={styles.topSummary}>
+          <div style={styles.topSummaryText}>{topHeaderText}</div>
+          {topMissionText && <div style={styles.topSummarySub}>{topMissionText}</div>}
         </div>
       )}
-
-      {/* QO Q-5: 챌린지 활성 시 상단 라벨 */}
-      {snap.challengeId && CHALLENGES[snap.challengeId] && !snap.bossActive && (
-        <div style={styles.challengeBadge}>
-          🏆 도전: {CHALLENGES[snap.challengeId].name} — W15
-        </div>
-      )}
-
-      {/* QO Q-1: 활성 일일 미션 진행도 1개 (가장 진행도 높은 미션) */}
-      {/* QO2-A: 카드 모달/슬롯/유물/이벤트 활성 시도 숨김 (좌측 라벨 stack 정리) */}
-      {!isFirstCardReveal && !snap.bossActive && !snap.cardChoices && !snap.slotActive
-        && !snap.pendingRelicChoices && !snap.pendingEvent && (() => {
-        const active = (snap.activeMissions || []) as any[];
-        if (active.length === 0) return null;
-        // 진행도 % 가장 높은 1개 선택
-        const best = active.map((m) => {
-          const def = MISSION_POOL.find((x) => x.id === m.id);
-          if (!def) return null;
-          return { def, progress: m.progress, ratio: m.progress / def.target };
-        }).filter(Boolean).sort((a: any, b: any) => b.ratio - a.ratio)[0] as any;
-        if (!best) return null;
-        if (best.progress >= best.def.target) return null;  // 완료된 건 banner로 처리
-        return (
-          <div style={styles.missionHud}>
-            <span>{best.def.icon} {best.def.name}</span>
-            <span style={styles.missionHudProgress}>{best.progress}/{best.def.target}</span>
-          </div>
-        );
-      })()}
 
       {/* QO Q-6: 진화 임박 (살아있는 같은 종류 evoNeed-1 도달) */}
       {/* MVP: 진화 임박은 카드 선택지 안의 배지로만 보여주고 상단 HUD에서는 숨김 */}
@@ -733,7 +748,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {/* 시너지 — 컴팩트 모드 (활성 개수 + 임박 시그널만 / 탭 시 펼침) */}
       {/* QA H-4: 첫 카드 픽 시 시너지 칩 숨김 */}
-      {showAssistControls && !gameplayChoiceOpen && !blockingDecisionOpen && !isFirstCardReveal && activeSynergyCount > 0 && (
+      {!isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && activeSynergyCount > 0 && (
         <button
           style={styles.synergyCompact}
           onClick={() => setSynergyExpanded(!synergyExpanded)}
@@ -743,7 +758,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           <span style={styles.synergyTapHint}>↗</span>
         </button>
       )}
-      {showAssistControls && !gameplayChoiceOpen && !blockingDecisionOpen && synergyExpanded && (
+      {!isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && synergyExpanded && (
         <div style={styles.synergyExpandedPanel} onClick={() => setSynergyExpanded(false)}>
           {snap.synergyProgress?.map((sp: any) => (
             <div
@@ -773,11 +788,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             />
           </div>
           <span style={styles.waveProgressCount}>
-            {(snap.waveSpawned ?? 0) < snap.waveTotal && (snap.aliveHeroes ?? 0) === 0
-              ? `${snap.waveSpawned}/${snap.waveTotal} · 곧 침입`
-              : (snap.aliveHeroes ?? 0) === 0
-                ? `${snap.waveSpawned}/${snap.waveTotal} · 정리 중`
-              : `${snap.waveSpawned}/${snap.waveTotal} · 남음 ${snap.aliveHeroes ?? 0}`}
+            {waveBalanceText || '로딩 중'}
           </span>
         </div>
       )}
@@ -1160,7 +1171,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         </div>
 
         {/* 컨트롤 row — 초반에는 쓸 수 없는 보조 행동을 숨겨 카드 CTA가 주인공이 되게 한다. */}
-        {showRallyControl && (
+        {showControlRow && (
           <div style={styles.controlRow}>
             {showRallyControl && (() => {
               const rallyDisabled = !snap.rallyReady || controlsBlocked || snap.aliveMonsters <= 0;
@@ -1369,7 +1380,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 접근성 토글 — 일시정지 메뉴 안 — 사용자 store 직접 접근 */}
 
       {/* 일시정지 메뉴 — 게임 도중 안전한 탈출 / 설정 */}
-      {showPauseMenu && pauseMenuRequestedRef.current && (
+      {showPauseMenu && (
         <div style={styles.pauseOverlay} onClick={(e) => e.stopPropagation()}>
           <div style={styles.pauseCard}>
             <h2 style={styles.pauseTitle}>일시정지</h2>
@@ -1381,7 +1392,6 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             <button
               style={styles.pauseBtnPrimary}
               onClick={() => {
-                pauseMenuRequestedRef.current = false;
                 eng()?.setUserPause(false);
                 setShowPauseSettings(false);
                 setShowPauseMenu(false);
@@ -1922,6 +1932,49 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#D63031', fontWeight: 'bold', fontSize: 11, letterSpacing: 1,
     fontFamily: 'inherit', cursor: 'pointer',
   },
+  topSummary: {
+    position: 'absolute',
+    left: 60,
+    right: 60,
+    top: 8,
+    zIndex: 8,
+    pointerEvents: 'none',
+    color: '#FFEAA7',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  topSummaryText: {
+    background: 'rgba(20,12,42,0.8)',
+    border: '1px solid #4a3a6e',
+    borderRadius: 12,
+    padding: '5px 10px',
+    color: '#FDCB6E',
+    fontSize: 10,
+    letterSpacing: 1,
+    fontWeight: 700,
+    textShadow: '1px 1px 0 #000',
+    whiteSpace: 'nowrap',
+    textAlign: 'center',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  topSummarySub: {
+    background: 'rgba(0,0,0,0.45)',
+    border: '1px dashed #a55eea',
+    borderRadius: 10,
+    padding: '4px 10px',
+    color: '#bbb',
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textAlign: 'center',
+    maxWidth: '85%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
   bossHp: { position: 'absolute', left: 10, right: 10, top: 80, zIndex: 8 },
   bossLabel: { color: '#FD79A8', fontSize: 11, fontWeight: 'bold', textAlign: 'center', textShadow: '2px 2px 0 #000', letterSpacing: 2, marginBottom: 2 },
   missionHud: {
@@ -2115,7 +2168,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   bottom: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    padding: '6px 8px calc(8px + env(safe-area-inset-bottom, 0))',
+    paddingTop: 6,
+    paddingRight: 8,
+    paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0))',
+    paddingLeft: 8,
     background: 'linear-gradient(0deg, rgba(5,3,15,0.97) 0%, rgba(5,3,15,0.85) 70%, transparent)',
     zIndex: 10,
   },

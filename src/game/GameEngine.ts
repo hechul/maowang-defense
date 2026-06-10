@@ -96,6 +96,11 @@ const GROUND_Y = FIELD.y + FIELD.h - 40;
 // 근접 부하가 적 진영 끝까지 밀고 올라가면 화면 밖으로 사라진 느낌이 강하다.
 // 전선을 살짝 왼쪽에 고정해 부하/용사 교전이 항상 보이게 한다.
 const MONSTER_FRONT_X = W - 105;
+const MONSTER_FRONT_X_MIN = 170;
+const MONSTER_STACK_PER_LINE = 6;
+const MONSTER_STACK_FRONT_STAGGER_X = 10;
+const MONSTER_STACK_GAP_X = 8;
+const MONSTER_STACK_MAX_GAP_X = 60;
 const MONSTER_BACK_X = 70;
 const HERO_CASTLE_X = 80;
 const HERO_MAX_X = W + 24;
@@ -107,6 +112,8 @@ interface UnitOpts {
   typeId: string;
   name: string;
   star?: number;
+  frontLineX?: number;
+  frontLineLane?: 0 | 1 | 2;
   sprite: HTMLCanvasElement;
   hp: number;
   atk: number;
@@ -135,6 +142,8 @@ class Unit {
   typeId: string;
   name: string;
   star: number;
+  frontLineX: number;
+  frontLineLane: 0 | 1 | 2;
   sprite: HTMLCanvasElement;
   scale: number;
   isBoss: boolean;
@@ -183,6 +192,8 @@ class Unit {
     this.typeId = opts.typeId;
     this.name = opts.name;
     this.star = opts.star ?? 1;
+    this.frontLineX = opts.frontLineX ?? MONSTER_FRONT_X;
+    this.frontLineLane = opts.frontLineLane ?? 1;
     this.sprite = opts.sprite;
     this.scale = opts.scale ?? 1;
     this.isBoss = opts.isBoss ?? false;
@@ -372,6 +383,9 @@ export class GameEngine {
   // - screenFlash: 전체 화면 컬러 플래시 페이드
   // - edgeRing: 화면 외곽 컬러 링 (시너지 발동)
   banners: { text: string; sub: string; color: string; t: number; life: number }[] = [];
+  private _lastBannerKey = '';
+  private _lastBannerAt = 0;
+  private _lastSoftBannerAt = 0;
   screenFlash = { color: '', a: 0 };
   edgeRing = { color: '', a: 0 };
   // 필살기
@@ -725,6 +739,9 @@ export class GameEngine {
     this.effects = []; this.slowMoT = 0;
     this.hitStopT = 0;
     this.banners = [];
+    this._lastBannerKey = '';
+    this._lastBannerAt = 0;
+    this._lastSoftBannerAt = 0;
     this.screenFlash = { color: '', a: 0 };
     this.edgeRing = { color: '', a: 0 };
     this.slot = {
@@ -1637,12 +1654,17 @@ export class GameEngine {
     // BUG-005: force=true 시 maxMon 우회 (진화 결과 손실 방지)
     if (live >= maxMon && !opts?.force) return;
     const sprite = def.buildSprite();
-    // LD-A: 14마리 클러스터 분산 — 6마리당 1줄로 묶고 z-row마다 6px y 오프셋
-    const col = live % 6;
-    const row = Math.floor(live / 6);
-    const baseX = 100 + col * 14 + row * 4;
+    // LD-A: 14마리 클러스터 분산 — 라인별 슬롯 분산으로 근거리/원거리 가시성 유지
+    const line = this.monsterFrontLineFor(def);
+    const occupied = this.monsterLaneOccupiedCount(line);
+    const maxCol = MONSTER_STACK_PER_LINE;
+    const col = occupied % maxCol;
+    const row = Math.floor(occupied / maxCol);
+    const frontLineX = this.monsterFrontLineX(line, row);
+    const baseX = Math.max(MONSTER_BACK_X + 12, frontLineX - 24 - col * MONSTER_STACK_FRONT_STAGGER_X);
     // MonsterStatsSystem: relic/challenge 멀티
     const mstats = calculateMonsterStats({
+      wave: this.wave,
       challengeHpMul: ch?.modifiers.monsterHpMul ?? 1,
       hasIronRelic: this.relics.has('iron'),
       hasWrathRelic: this.relics.has('wrath'),
@@ -1670,16 +1692,14 @@ export class GameEngine {
       mpGen: def.mpGen, auraBuff: def.auraBuff,
       dot: def.dot ?? dotPayload.dot,
       scale: 0.75,
-      x: Math.min(baseX, 240), y: GROUND_Y,
+      frontLineX,
+      frontLineLane: line,
+      x: baseX, y: GROUND_Y,
     });
     // 라인 시스템 (P2-9) — 태그 기반 자동 배치 (LD-2: 16px 분리로 시각적 명확화)
-    // LD-A: row 오프셋으로 클러스터 시 y 분산 추가
-    const isRanged = def.tags.includes('magic') || def.range > 60;
-    const isTank = def.tags.includes('tank') || def.tags.includes('brute');
-    const lineY = isTank ? GROUND_Y - 16 : isRanged ? GROUND_Y + 16 : GROUND_Y;
-    u.y = lineY + (Math.floor(live / 6) % 2 === 1 ? 4 : 0);
-    const lineX = isTank ? -10 : isRanged ? 14 : 0;
-    u.x += lineX;
+    const lineY = this.monsterLineY(line);
+    const rowOffset = row % 3 === 1 ? -6 : row % 3 === 2 ? 6 : 0;
+    u.y = lineY + ((occupied % 2) === 1 ? 4 : 0) + rowOffset;
     this.clampUnitX(u);
 
     this.monsters.push(u);
@@ -2112,10 +2132,11 @@ export class GameEngine {
         }
       } else if (u.attackPhase === 0) {
         const dir = Math.sign(dx);
-        if (u.team === 'monster' && dir > 0 && u.x >= MONSTER_FRONT_X) {
+        const frontLineStop = Math.max(MONSTER_FRONT_X_MIN, u.frontLineX ?? MONSTER_FRONT_X);
+        if (u.team === 'monster' && dir > 0 && u.x >= frontLineStop) {
           // MVP 전선 고정: 근접 몬스터가 화면 오른쪽 끝까지 따라가 사라지지 않게 한다.
           // 용사가 다가오면 다시 사거리 안에서 교전한다.
-          u.x = MONSTER_FRONT_X;
+          u.x = frontLineStop;
           u._isMoving = false;
           return;
         }
@@ -2137,8 +2158,49 @@ export class GameEngine {
     if (u.team === 'hero') {
       u.x = Math.min(HERO_MAX_X, Math.max(HERO_CASTLE_X, u.x));
     } else {
-      u.x = Math.min(MONSTER_FRONT_X, Math.max(MONSTER_BACK_X, u.x));
+      const frontLine = Math.max(MONSTER_FRONT_X_MIN, u.frontLineX ?? MONSTER_FRONT_X);
+      u.x = Math.min(frontLine, Math.max(MONSTER_BACK_X, u.x));
     }
+  }
+
+  private monsterFrontLineFor(def: MonsterDef): 0 | 1 | 2 {
+    const isRanged = def.tags.includes('magic') || def.range > 60;
+    const isTank = def.tags.includes('tank') || def.tags.includes('brute');
+    const lanes: Array<0 | 1 | 2> = isTank ? [0, 1, 2] : isRanged ? [2, 1, 0] : [1, 2, 0];
+    const primary = lanes[0];
+    if (this.monsterLaneOccupiedCount(primary) < MONSTER_STACK_PER_LINE) return primary;
+    // 주 역할 라인이 꽉 찼을 때만 다른 라인으로 흘려보내 겹침을 줄인다.
+    return this.chooseLeastOccupiedLane(lanes);
+  }
+
+  private chooseLeastOccupiedLane(lanes: Array<0 | 1 | 2>): 0 | 1 | 2 {
+    const [first, ...rest] = lanes;
+    let best = first;
+    let bestCount = this.monsterLaneOccupiedCount(best);
+    for (const lane of rest) {
+      const count = this.monsterLaneOccupiedCount(lane);
+      if (count < bestCount) {
+        best = lane;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
+  private monsterLineY(line: 0 | 1 | 2): number {
+    if (line === 0) return GROUND_Y - 16;
+    if (line === 2) return GROUND_Y + 16;
+    return GROUND_Y;
+  }
+
+  private monsterFrontLineX(line: 0 | 1 | 2, rowIndex: number): number {
+    const laneFront = MONSTER_FRONT_X - Math.min(MONSTER_STACK_MAX_GAP_X, rowIndex * MONSTER_STACK_GAP_X);
+    const laneOffset = line === 0 ? -4 : line === 2 ? 4 : 0;
+    return Math.max(MONSTER_FRONT_X_MIN, laneFront + laneOffset);
+  }
+
+  private monsterLaneOccupiedCount(line: 0 | 1 | 2): number {
+    return this.monsters.filter((m) => !m.dead && m.team === 'monster' && m.frontLineLane === line).length;
   }
 
   private findTarget(u: Unit): Unit | null {
@@ -2873,6 +2935,13 @@ export class GameEngine {
     if (this._secretsAggregate.cardCostMul < 1) {
       c = Math.ceil(c * this._secretsAggregate.cardCostMul);
     }
+    // 플레이어가 이미 큰 전투량을 만들수록 다음 스펠 비용을 조금 올려 난이도 안정
+    const pressure = Math.max(0, this.monsters.filter((m) => !m.dead).length - 6);
+    if (pressure > 0) c = Math.ceil(c * (1 + Math.min(0.9, pressure * 0.06)));
+    // 중반 이후 wave progression로 소환 난이도 미세 상향 (스폰량이 높은 구간 과욕 완화)
+    if (this.wave > 8) {
+      c = Math.ceil(c * (1 + Math.min(0.5, (this.wave - 8) * 0.02)));
+    }
     return c;
   }
 
@@ -2888,7 +2957,7 @@ export class GameEngine {
     const surge = this.relics.has('surge') ? 3 : 1;
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
     const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
-    const natural = 2.0 * surge * mpRegenMul * this.stageMod.mpRegenMul;
+    const natural = 1.8 * surge * mpRegenMul * this.stageMod.mpRegenMul;
     const relicAdd = this.fusedEffectAdd('mpRegenAdd');
     const secretAdd = this._secretsAggregate.mpRegenAdd;
     const synergyAdd = this._hiddenMpRegenAdd;
@@ -3697,9 +3766,27 @@ export class GameEngine {
 
   /** 화면 중앙 큰 배너 텍스트 (스탬프 스케일 커브로 등장) */
   private showBanner(text: string, sub = '', color = '#FFEAA7', life = 1.1) {
-    // 큐에 쌓이지만 동시에 1개만 보여 — 가장 최근 것이 우선
+    const now = performance.now();
+    const key = `${text}|${sub}`;
+    if (key === this._lastBannerKey && now - this._lastBannerAt < 1500) return;
+
+    const isSoftFeedback =
+      color === '#888' ||
+      life <= 0.85 ||
+      text.includes('쿨다운') ||
+      text.includes('사용 불가') ||
+      text.includes('대상 없음') ||
+      text.includes('마력 부족') ||
+      text.includes('충전 부족');
+    if (isSoftFeedback && now - this._lastSoftBannerAt < 1200) return;
+
+    this._lastBannerKey = key;
+    this._lastBannerAt = now;
+    if (isSoftFeedback) this._lastSoftBannerAt = now;
+
+    if (this.banners.some((b) => `${b.text}|${b.sub}` === key)) return;
     this.banners.push({ text, sub, color, t: 0, life });
-    if (this.banners.length > 3) this.banners.shift();
+    if (this.banners.length > 2) this.banners.shift();
   }
   /** 전체 화면 컬러 플래시 (페이드 아웃) */
   private flashScreen(color: string, intensity = 0.5) {
@@ -3876,25 +3963,9 @@ export class GameEngine {
     ctx.restore();
   }
 
-  /** 화면 중앙 배너 (스탬프 스케일 커브) — U-1: 직전 배너 작게 표시 */
+  /** 화면 중앙 배너 (스탬프 스케일 커브) */
   private drawBanners() {
     if (this.banners.length === 0) return;
-    // 직전 배너 (작게, 위에)
-    if (this.banners.length >= 2) {
-      const prev = this.banners[this.banners.length - 2];
-      const ctx2 = this.ctx;
-      ctx2.save();
-      ctx2.globalAlpha = 0.5 * (1 - prev.t / prev.life);
-      ctx2.font = 'bold 14px sans-serif';
-      ctx2.textAlign = 'center';
-      ctx2.shadowColor = '#000';
-      ctx2.shadowBlur = 3;
-      ctx2.fillStyle = prev.color;
-      ctx2.fillText(prev.text, W / 2, 168);
-      ctx2.restore();
-      ctx2.textAlign = 'left';
-    }
-    // 가장 최근 배너 (큰 표시)
     const b = this.banners[this.banners.length - 1];
     const ctx = this.ctx;
     const t = b.t / b.life;
@@ -5356,7 +5427,7 @@ export class GameEngine {
       cardChoices: this.cardChoices,
       ultiReady: this.ulti.ready,
       ultiGauge: this.ulti.gauge / this.ulti.max,
-      paused: this.paused, speed: this.speed, autoReveal: this.autoReveal,
+      paused: this.paused, speed: this.speed, autoReveal: this.autoReveal, userPaused: this.overlayQueue.userPauseActive,
       cardCost: this.currentCardCost(),
       mpRegenPerSec: this.estimateMpRegenPerSec(),
       relics: Array.from(this.relics),
