@@ -2935,6 +2935,11 @@ export class GameEngine {
     if (this._secretsAggregate.cardCostMul < 1) {
       c = Math.ceil(c * this._secretsAggregate.cardCostMul);
     }
+    // MVP 첫 스테이지는 "카드를 고르는 재미"가 핵심이다.
+    // 4번째 카드 이후 비용 폭주를 조금 눌러 초반 대기 공백을 줄인다.
+    if (this.runMode === 'stage' && this.runStageDef?.id === 'ch1_s1' && this.cardRevealCount >= 3) {
+      c = Math.ceil(c * 0.9);
+    }
     // 플레이어가 이미 큰 전투량을 만들수록 다음 스펠 비용을 조금 올려 난이도 안정
     const pressure = Math.max(0, this.monsters.filter((m) => !m.dead).length - 6);
     if (pressure > 0) c = Math.ceil(c * (1 + Math.min(0.9, pressure * 0.06)));
@@ -2958,10 +2963,14 @@ export class GameEngine {
     const ch = this.challengeId ? CHALLENGES[this.challengeId] : undefined;
     const mpRegenMul = ch?.modifiers.mpRegenMul ?? 1;
     const natural = 1.8 * surge * mpRegenMul * this.stageMod.mpRegenMul;
+    const noDefenseRecovery =
+      this.monsters.every((m) => m.dead) && this.heroes.some((h) => !h.dead)
+        ? 4.8
+        : 0;
     const relicAdd = this.fusedEffectAdd('mpRegenAdd');
     const secretAdd = this._secretsAggregate.mpRegenAdd;
     const synergyAdd = this._hiddenMpRegenAdd;
-    return Math.max(0.1, natural + relicAdd + secretAdd + synergyAdd);
+    return Math.max(0.1, natural + noDefenseRecovery + relicAdd + secretAdd + synergyAdd);
   }
 
   beginSpin(opts: { free?: boolean; allowDuringWaveBreak?: boolean } = {}) {
@@ -3373,7 +3382,7 @@ export class GameEngine {
       this.showBanner('⚡ 쿨다운', `${this.rallyCdT.toFixed(1)}초 후 사용 가능`, '#888', 0.7);
       return false;
     }
-    this.rallyCdT = Math.max(0.5, 2.0 - this.demonPower.rallyCdReduction);
+    this.rallyCdT = Math.max(1.2, 5.0 - this.demonPower.rallyCdReduction);
     this.rallyActiveT = 1.5;  // BUG-002: 1.5초 동안 buff 활성
     this.incrRallyUsed();
     let count = 0;
@@ -3554,8 +3563,9 @@ export class GameEngine {
       this.mp = Math.max(0, this.mp + fx.mpDelta);
       this.spawnDamageText(W / 2, FIELD.y + 30, `${fx.mpDelta} 마력`, '#FF7675', false, true);
     }
-    if (fx.cardRevealCountDelta !== 0) {
-      this.cardRevealCount = Math.max(0, this.cardRevealCount + fx.cardRevealCountDelta);
+    if (fx.cardRevealCountDelta !== 0 && this.cardRevealCount > 2) {
+      // 탱커 할인은 비용 상승을 한 단계 완화하되, 온보딩 할인(첫 2회)을 무한 연장하지 않는다.
+      this.cardRevealCount = Math.max(2, this.cardRevealCount + fx.cardRevealCountDelta);
       this.spawnDamageText(W / 2, FIELD.y + 30, '+다음 카드 할인', '#74B9FF', false, false);
     }
     if (fx.nextRevealBonusTag) {
@@ -3746,7 +3756,7 @@ export class GameEngine {
   /* ===== Helpers ===== */
   private addMP(amt: number) { this.mp = Math.min(this.mpMax, this.mp + amt); }
   private currentEmergencyRevealMaxUses() {
-    const newbieBonus = useSaveStore.getState().runs <= 1 ? 3 : 0;
+    const newbieBonus = useSaveStore.getState().runs <= 1 ? 1 : 0;
     return 1 + this.demonPower.emergencyRevealExtra + newbieBonus;
   }
   private _lastShakeAt = 0;

@@ -157,18 +157,28 @@ function CardChoiceButton({
   onPick,
   style,
   className,
+  disabled = false,
   children,
 }: {
   onPick: () => void;
   style: React.CSSProperties;
   className?: string;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
-      style={style}
+      style={{
+        ...style,
+        cursor: disabled ? 'wait' : style.cursor,
+        opacity: disabled ? 0.72 : style.opacity,
+      }}
       className={className}
-      onClick={onPick}
+      onClick={() => {
+        if (disabled) return;
+        onPick();
+      }}
+      disabled={disabled}
     >
       {children}
     </button>
@@ -366,6 +376,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showPauseMenu, setShowPauseMenu] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const [showPauseSettings, setShowPauseSettings] = useState(false);
+  const [spinRequestPending, setSpinRequestPending] = useState(false);
+  const [cardPickPending, setCardPickPending] = useState(false);
   const userPaused = !!(snap as any).userPaused;
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
   const showDemonSpeech =
@@ -499,6 +511,16 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   useEffect(() => {
     if (!snap.waveBreakActive) setWaveBreakDetailsOpen(false);
   }, [snap.waveBreakActive]);
+
+  useEffect(() => {
+    if (!spinRequestPending || snap.slotActive || snap.cardChoices) return;
+    const t = window.setTimeout(() => setSpinRequestPending(false), 450);
+    return () => window.clearTimeout(t);
+  }, [spinRequestPending, snap.slotActive, snap.cardChoices]);
+
+  useEffect(() => {
+    if (!snap.cardChoices) setCardPickPending(false);
+  }, [snap.cardChoices]);
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
@@ -916,7 +938,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 return (
                   <div key={`${id}-${i}-${snap.kills}`} style={styles.cardWrap}>
                   <CardChoiceButton
-                    onPick={() => eng()?.chooseCard(i)}
+                    onPick={() => {
+                      if (cardPickPending) return;
+                      setCardPickPending(true);
+                      eng()?.chooseCard(i);
+                    }}
+                    disabled={cardPickPending}
                     style={{
                       ...styles.card,
                       ...(isFirstCardReveal ? styles.cardFirstReveal : {}),
@@ -968,8 +995,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     {!isFirstCardReveal && rarity === 'legendary' && (
                       <div style={styles.cardTradeoff}>⚠ 픽 시 마력 -50</div>
                     )}
-                    {!isFirstCardReveal && def?.tags.includes('tank') && (
-                      <div style={styles.cardTradeoffPositive}>+ 다음 펼치기 할인</div>
+                    {!isFirstCardReveal && def?.tags.includes('tank') && (snap.cardRevealCount ?? 0) > 2 && (
+                      <div style={styles.cardTradeoffPositive}>+ 다음 비용 완화</div>
                     )}
                     {!isFirstCardReveal && def?.tags.includes('magic') && rarity !== 'legendary' && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 마법 등장률 ↑</div>
@@ -1027,7 +1054,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           {(() => {
             const cantReveal = snap.mp < snap.cardCost;
             const fieldFull = monsterFull && !snap.slotActive && !snap.cardChoices;
-            const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu;
+            const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu || spinRequestPending;
             const lastChanceReveal =
               cantReveal &&
               !snap.emergencyRevealUsed &&
@@ -1054,7 +1081,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   position: 'relative',
                 }}
-                onClick={() => eng()?.beginSpin()}
+                onClick={() => {
+                  if (spinRequestPending) return;
+                  const started = eng()?.beginSpin();
+                  if (started !== false) setSpinRequestPending(true);
+                }}
                 disabled={disabled}
                 className={firstSpinPulse ? 'spin-pulse' : ''}
               >
@@ -1063,7 +1094,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   ...(revealLooksMuted ? styles.btnRevealTopMuted : {}),
                   ...(lastChanceReveal ? styles.btnRevealTopEmergency : {}),
                 }}>
-                  {snap.slotActive
+                  {spinRequestPending || snap.slotActive
                     ? '봉인 깨는 중...'
                     : fieldFull
                       ? '군단 가득 참'
@@ -1077,7 +1108,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   ...styles.btnRevealSub,
                   ...(revealLooksMuted ? styles.btnRevealSubMuted : {}),
                 }}>
-                  {snap.slotActive
+                  {spinRequestPending || snap.slotActive
                     ? '─'
                     : fieldFull
                       ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
@@ -2167,10 +2198,10 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 0 24px #FF6B6B',
   },
   bottom: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
+    position: 'absolute', left: 0, right: 0, bottom: 8,
     paddingTop: 6,
     paddingRight: 8,
-    paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0))',
+    paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0))',
     paddingLeft: 8,
     background: 'linear-gradient(0deg, rgba(5,3,15,0.97) 0%, rgba(5,3,15,0.85) 70%, transparent)',
     zIndex: 10,
