@@ -439,6 +439,40 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   })();
   const topMissionText = snap.gameMode === 'daily' && topMission ? `📜 ${topMission}` : null;
   const showTopSummary = !isFirstCardReveal && !gameplayChoiceOpen && !snap.cardChoices && !snap.slotActive;
+  const battleCoach = (() => {
+    const aliveHeroes = snap.aliveHeroes ?? 0;
+    const aliveMonsters = snap.aliveMonsters ?? 0;
+    if (snap.bossActive && snap.bossNext) {
+      return {
+        tone: snap.bossNext.danger ? 'danger' : 'warn',
+        label: '보스 패턴',
+        text: `${snap.bossNext.label}${snap.bossNext.sec > 0 && !snap.bossNext.label.includes('s') ? ` ${snap.bossNext.sec.toFixed(1)}s` : ''}`,
+      };
+    }
+    if (snap.heroNearCastle) {
+      return { tone: 'danger', label: '성문 압박', text: '버팀·제압 카드나 돌격으로 시간을 벌기' };
+    }
+    if (aliveMonsters <= 0 && aliveHeroes > 0) {
+      return { tone: 'danger', label: '방어선 없음', text: '라인 복구 카드가 최우선' };
+    }
+    if (monsterFull) {
+      return { tone: 'warn', label: '군단 가득', text: '처치 후 다시 펼치기' };
+    }
+    if (aliveHeroes >= 3) {
+      return { tone: 'warn', label: '다수 침입', text: '물량·광역·원거리 카드 우선' };
+    }
+    if (snap.mp < snap.cardCost) {
+      return {
+        tone: 'quiet',
+        label: '마력 대기',
+        text: aliveHeroes > 0 ? '처치하면 마력이 빨리 회복됩니다' : '곧 다음 카드를 펼칠 수 있습니다',
+      };
+    }
+    if ((snap.cardRevealCount ?? 0) <= 2) {
+      return { tone: 'good', label: '초반 목표', text: '같은 카드 3장으로 진화 노리기' };
+    }
+    return { tone: 'good', label: '전선 안정', text: '진화·시너지 카드부터 고르기' };
+  })();
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
   const waveBreakAffordable = {
@@ -934,6 +968,19 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   1.0;
 
                 const canLock = showAdvancedCardTools && snap.mp >= 50 && snap.lockedCardId !== id;
+                const cardRecommendation = (() => {
+                  if (!def) return null;
+                  if (evoImminent) return '진화 완성';
+                  if (synergyTrigger) return `${synergyTrigger.name} 완성`;
+                  if ((snap.aliveMonsters ?? 0) <= 0 && (snap.aliveHeroes ?? 0) > 0) {
+                    if (def.tags.includes('tank') || (def.summonCount ?? 1) > 1 || def.revive) return '라인 복구';
+                  }
+                  if (snap.heroNearCastle && (def.tags.includes('tank') || def.knockback || def.revive)) return '성문 방어';
+                  if ((snap.aliveHeroes ?? 0) >= 3 && (def.aoe || def.knockback || (def.summonCount ?? 1) > 1)) return '다수 대응';
+                  if (snap.mp < snap.cardCost && (def.tags.includes('support') || def.tags.includes('magic'))) return '마력 운영';
+                  if (def.range > 60 && (snap.aliveHeroes ?? 0) > 0) return '후열 화력';
+                  return null;
+                })();
 
                 return (
                   <div key={`${id}-${i}-${snap.kills}`} style={styles.cardWrap}>
@@ -976,6 +1023,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       </div>
                     )}
                     <div style={styles.cardName}>{def?.name || id}</div>
+                    {cardRecommendation && (
+                      <div style={styles.cardRecommendation}>추천 · {cardRecommendation}</div>
+                    )}
                     {isFirstCardReveal && (
                       <div style={styles.cardRoleHint}>{role.hint}</div>
                     )}
@@ -1046,6 +1096,18 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               </button>
             )}
           </>
+        )}
+
+        {!gameplayChoiceOpen && !blockingDecisionOpen && !showPauseMenu && battleCoach && (
+          <div style={{
+            ...styles.battleCoach,
+            ...(battleCoach.tone === 'danger' ? styles.battleCoachDanger : {}),
+            ...(battleCoach.tone === 'warn' ? styles.battleCoachWarn : {}),
+            ...(battleCoach.tone === 'good' ? styles.battleCoachGood : {}),
+          }}>
+            <span style={styles.battleCoachLabel}>{battleCoach.label}</span>
+            <span style={styles.battleCoachText}>{battleCoach.text}</span>
+          </div>
         )}
 
         {!gameplayChoiceOpen && !blockingDecisionOpen && !showPauseMenu && (
@@ -2211,6 +2273,51 @@ const styles: Record<string, React.CSSProperties> = {
     paddingTop: 8,
     background: 'linear-gradient(0deg, rgba(5,3,15,0.98) 0%, rgba(5,3,15,0.9) 78%, transparent)',
   },
+  battleCoach: {
+    margin: '0 auto 6px',
+    maxWidth: 350,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: '5px 9px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'linear-gradient(180deg, rgba(31,22,58,0.92), rgba(12,6,28,0.92))',
+    boxShadow: '0 0 10px rgba(0,0,0,0.35)',
+    pointerEvents: 'none',
+  },
+  battleCoachDanger: {
+    border: '1px solid #FF7675',
+    background: 'linear-gradient(180deg, rgba(90,25,36,0.92), rgba(26,6,12,0.94))',
+    boxShadow: '0 0 12px rgba(255,118,117,0.36)',
+  },
+  battleCoachWarn: {
+    border: '1px solid #FDCB6E',
+    boxShadow: '0 0 12px rgba(253,203,110,0.28)',
+  },
+  battleCoachGood: {
+    border: '1px solid #26de81',
+    boxShadow: '0 0 10px rgba(38,222,129,0.22)',
+  },
+  battleCoachLabel: {
+    color: '#FDCB6E',
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    whiteSpace: 'nowrap',
+    textShadow: '1px 1px 0 #000',
+  },
+  battleCoachText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    textShadow: '1px 1px 0 #000',
+  },
   cardArea: {
     margin: '0 auto 4px',
     textAlign: 'center',
@@ -2325,6 +2432,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '1px 4px', borderRadius: 3,
     textAlign: 'center', marginTop: 1,
     letterSpacing: 0.3,
+  },
+  cardRecommendation: {
+    fontSize: 8,
+    color: '#15082a',
+    background: 'linear-gradient(90deg,#FFEAA7,#FDCB6E)',
+    borderRadius: 3,
+    padding: '2px 4px',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    letterSpacing: 0.4,
+    textShadow: 'none',
+    boxShadow: '0 0 6px rgba(253,203,110,0.55)',
   },
   cardBadgeEvolve: {
     fontSize: 9, color: '#15082a',
