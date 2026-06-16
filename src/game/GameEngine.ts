@@ -413,6 +413,8 @@ export class GameEngine {
   private _autoRevealCooldownT = 0;
   // 카드 펼치기 횟수 (첫 3회 할인용)
   cardRevealCount = 0;
+  private tankCostReliefUses = 0;
+  private readonly tankCostReliefLimit = 2;
   // BAL-7: 위급 상태 무료 펼치기 1회 (1런당)
   emergencyRevealUsed = false;
   // 다음 카드 펼치기에서 등장률 부스트 받을 태그 (마법 픽 → 다음 마법 카드 ↑)
@@ -768,6 +770,7 @@ export class GameEngine {
     this._autoRevealCooldownT = 0;
     this.ultiVariant = 0;
     this.cardRevealCount = 0;
+    this.tankCostReliefUses = 0;
     this.pendingRevival = false;
     this.revivalUsed = false;
     this.rallyCdT = 0;
@@ -2935,11 +2938,7 @@ export class GameEngine {
     if (this._secretsAggregate.cardCostMul < 1) {
       c = Math.ceil(c * this._secretsAggregate.cardCostMul);
     }
-    // MVP 첫 스테이지는 "카드를 고르는 재미"가 핵심이다.
-    // 4번째 카드 이후 비용 폭주를 조금 눌러 초반 대기 공백을 줄인다.
-    if (this.runMode === 'stage' && this.runStageDef?.id === 'ch1_s1' && this.cardRevealCount >= 3) {
-      c = Math.ceil(c * 0.9);
-    }
+    // 초반도 카드 비용은 서서히 올라야 "계속 뽑으면 무조건 승리" 느낌이 줄어든다.
     // 플레이어가 이미 큰 전투량을 만들수록 다음 스펠 비용을 조금 올려 난이도 안정
     const pressure = Math.max(0, this.monsters.filter((m) => !m.dead).length - 6);
     if (pressure > 0) c = Math.ceil(c * (1 + Math.min(0.9, pressure * 0.06)));
@@ -3502,7 +3501,7 @@ export class GameEngine {
     Audio.ui_tap();
     Ait.haptic('light');
   }
-  chooseCard(idx: number) {
+  chooseCard(idx: number): boolean {
     // CardSystem: 선택 검증 + risk 트리거 결정 위임
     const r = chooseCardResult({
       cardChoices: this.cardChoices,
@@ -3521,7 +3520,7 @@ export class GameEngine {
         this.riskCardSlot = null;
         if (this.paused && this.canResumeFrom('cardChoice')) this.paused = false;
       }
-      return;
+      return false;
     }
     const t = r.pickedMonsterId!;
     if (r.triggeredRiskCard) {
@@ -3563,9 +3562,14 @@ export class GameEngine {
       this.mp = Math.max(0, this.mp + fx.mpDelta);
       this.spawnDamageText(W / 2, FIELD.y + 30, `${fx.mpDelta} 마력`, '#FF7675', false, true);
     }
-    if (fx.cardRevealCountDelta !== 0 && this.cardRevealCount > 2) {
+    if (
+      fx.cardRevealCountDelta !== 0 &&
+      this.cardRevealCount > 2 &&
+      this.tankCostReliefUses < this.tankCostReliefLimit
+    ) {
       // 탱커 할인은 비용 상승을 한 단계 완화하되, 온보딩 할인(첫 2회)을 무한 연장하지 않는다.
       this.cardRevealCount = Math.max(2, this.cardRevealCount + fx.cardRevealCountDelta);
+      this.tankCostReliefUses++;
       this.spawnDamageText(W / 2, FIELD.y + 30, '+다음 카드 할인', '#74B9FF', false, false);
     }
     if (fx.nextRevealBonusTag) {
@@ -3644,6 +3648,7 @@ export class GameEngine {
         if (this.canResumeFrom('cardChoice')) this.paused = false;
       }, delay);
     }
+    return true;
   }
 
   /** AUTO 모드: 카드 점수 매겨 최적의 카드 선택
@@ -5478,6 +5483,8 @@ export class GameEngine {
       waveTotal: this.waveTotal,
       runs: useSaveStore.getState().runs,
       cardRevealCount: this.cardRevealCount,
+      tankCostReliefUses: this.tankCostReliefUses,
+      tankCostReliefLimit: this.tankCostReliefLimit,
       autoPickT: this._autoPickT,
       // FEEL F-7: 살아있는 monster 수와 현재 cap
       aliveMonsters: this.monsters.filter((m) => !m.dead).length,

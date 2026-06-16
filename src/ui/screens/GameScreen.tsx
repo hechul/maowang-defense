@@ -378,6 +378,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const [showPauseSettings, setShowPauseSettings] = useState(false);
   const [spinRequestPending, setSpinRequestPending] = useState(false);
   const [cardPickPending, setCardPickPending] = useState(false);
+  const cardPickPendingRef = useRef(false);
   const userPaused = !!(snap as any).userPaused;
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
   const showDemonSpeech =
@@ -391,13 +392,28 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     snap.speed !== 1 ||
     (onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3);
   const showAdvancedCardTools = onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3;
+  const castleUnderRealPressure =
+    !!snap.heroNearCastle &&
+    (
+      (snap.aliveHeroes ?? 0) >= 2 ||
+      snap.mp < snap.cardCost ||
+      hpRatio < 0.6
+    );
+  const rallyUrgent =
+    castleUnderRealPressure ||
+    !!(snap.bossActive && snap.aliveHeroes && snap.aliveHeroes > 0) ||
+    ((snap.aliveHeroes ?? 0) >= 3 && snap.mp < snap.cardCost);
+  const rallyFirstLesson =
+    (snap.runs ?? 0) <= 1 &&
+    (snap.rallyUsedCount ?? 0) === 0 &&
+    (snap.wave ?? 1) <= 2 &&
+    (snap.aliveHeroes ?? 0) > 0;
   const shouldSurfaceRally =
     (snap.aliveMonsters ?? 0) > 0 &&
     (
-      snap.rallyReady ||
       snap.rallyActiveT > 0 ||
-      snap.heroNearCastle ||
-      !!(snap.bossActive && snap.aliveHeroes && snap.aliveHeroes > 0)
+      rallyUrgent ||
+      rallyFirstLesson
     );
   const showRallyControl = shouldSurfaceRally || snap.rallyActiveT > 0;
   const showControlRow = showRallyControl || showAssistControls;
@@ -442,6 +458,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const battleCoach = (() => {
     const aliveHeroes = snap.aliveHeroes ?? 0;
     const aliveMonsters = snap.aliveMonsters ?? 0;
+    const canRallyNow = aliveMonsters > 0 && !!snap.rallyReady && showRallyControl;
     if (snap.bossActive && snap.bossNext) {
       return {
         tone: snap.bossNext.danger ? 'danger' : 'warn',
@@ -450,7 +467,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       };
     }
     if (snap.heroNearCastle) {
-      return { tone: 'danger', label: '성문 압박', text: '버팀·제압 카드나 돌격으로 시간을 벌기' };
+      return {
+        tone: 'danger',
+        label: '성문 압박',
+        text: canRallyNow ? '돌격 또는 버팀 카드로 시간 벌기' : '버팀·제압 카드로 시간 벌기',
+      };
     }
     if (aliveMonsters <= 0 && aliveHeroes > 0) {
       return { tone: 'danger', label: '방어선 없음', text: '라인 복구 카드가 최우선' };
@@ -553,8 +574,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   }, [spinRequestPending, snap.slotActive, snap.cardChoices]);
 
   useEffect(() => {
-    if (!snap.cardChoices) setCardPickPending(false);
-  }, [snap.cardChoices]);
+    if (snap.cardChoices || !cardPickPending) return;
+    const t = window.setTimeout(() => {
+      cardPickPendingRef.current = false;
+      setCardPickPending(false);
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [snap.cardChoices, cardPickPending]);
 
   // MVP: paused는 카드 선택/튜토리얼/웨이브 준비 같은 시스템 정지에도 켜진다.
   // 그래서 paused=true만으로 일시정지 메뉴를 자동 노출하면 '게임 재개'가 반복해서 뜬다.
@@ -869,7 +895,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         {!blockingDecisionOpen && !showPauseMenu && (snap.slotActive || snap.cardChoices) && (
             <div style={styles.cardArea}>
               <div style={styles.cardAreaLabel}>
-                {snap.slotActive
+                {cardPickPending && snap.cardChoices
+                ? '소환 중...'
+                : snap.slotActive
                 ? '봉인을 깨는 중... 탭하면 즉시 공개'
                 : snap.slotTripleReveal
                   ? '✨ 같은 카드 3장 — 한 장 선택하세요'
@@ -910,7 +938,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           </div>
         )}
 
-        {!blockingDecisionOpen && !showPauseMenu && snap.cardChoices && (
+        {!blockingDecisionOpen && !showPauseMenu && snap.cardChoices && cardPickPending && (
+          <div style={styles.cardPickResolving}>선택한 몬스터를 전장에 소환 중...</div>
+        )}
+
+        {!blockingDecisionOpen && !showPauseMenu && snap.cardChoices && !cardPickPending && (
           <>
             <div
               style={{ ...styles.cards, ...(isFirstCardReveal ? styles.cardsFirstReveal : {}) }}
@@ -968,6 +1000,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   1.0;
 
                 const canLock = showAdvancedCardTools && snap.mp >= 50 && snap.lockedCardId !== id;
+                const tankCostReliefAvailable =
+                  (snap.tankCostReliefUses ?? 0) < (snap.tankCostReliefLimit ?? 2);
                 const cardRecommendation = (() => {
                   if (!def) return null;
                   if (evoImminent) return '진화 완성';
@@ -986,9 +1020,16 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   <div key={`${id}-${i}-${snap.kills}`} style={styles.cardWrap}>
                   <CardChoiceButton
                     onPick={() => {
-                      if (cardPickPending) return;
+                      if (cardPickPendingRef.current) return;
+                      cardPickPendingRef.current = true;
                       setCardPickPending(true);
-                      eng()?.chooseCard(i);
+                      const picked = eng()?.chooseCard(i);
+                      if (picked === false) {
+                        window.setTimeout(() => {
+                          cardPickPendingRef.current = false;
+                          setCardPickPending(false);
+                        }, 350);
+                      }
                     }}
                     disabled={cardPickPending}
                     style={{
@@ -1045,7 +1086,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     {!isFirstCardReveal && rarity === 'legendary' && (
                       <div style={styles.cardTradeoff}>⚠ 픽 시 마력 -50</div>
                     )}
-                    {!isFirstCardReveal && def?.tags.includes('tank') && (snap.cardRevealCount ?? 0) > 2 && (
+                    {!isFirstCardReveal && def?.tags.includes('tank') && tankCostReliefAvailable && (snap.cardRevealCount ?? 0) > 2 && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 비용 완화</div>
                     )}
                     {!isFirstCardReveal && def?.tags.includes('magic') && rarity !== 'legendary' && (
@@ -1208,9 +1249,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 : '/sprites/btn_ulti_charging_0.png';
             const showUltButton =
               snap.ultiReady ||
-              snap.bossActive ||
-              snap.ultiGauge >= 0.35 ||
-              onboardingAdvancedUnlocked;
+              snap.ultiGauge >= 0.85 ||
+              (snap.bossActive && snap.ultiGauge >= 0.6);
             if (!showUltButton) return null;
             // 필살기 변형 — 0:어둠 파동(🌊) / 1:지옥 소환(🔥) / 2:암흑 멸망(💀)
             const variantIcons = ['🌊', '🔥', '💀'];
@@ -2349,6 +2389,21 @@ const styles: Record<string, React.CSSProperties> = {
   cardsFirstReveal: {
     gap: 4,
     alignItems: 'stretch',
+  },
+  cardPickResolving: {
+    margin: '8px auto 10px',
+    maxWidth: 270,
+    padding: '14px 16px',
+    textAlign: 'center',
+    color: '#FFEAA7',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1.5,
+    background: 'linear-gradient(180deg,#241a3e,#0d0620)',
+    border: '2px solid #FDCB6E',
+    borderRadius: 8,
+    boxShadow: '0 0 14px rgba(253,203,110,0.35), 0 3px 0 #15102a',
+    textShadow: '1px 1px 0 #000',
   },
   rerollBtn: {
     display: 'block', margin: '0 auto 6px', padding: '7px 18px',
