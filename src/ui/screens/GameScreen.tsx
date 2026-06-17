@@ -362,6 +362,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     (snap.runs ?? 0) <= 1 &&
     (snap.cardRevealCount ?? 0) <= 1 &&
     (!!snap.cardChoices || !!snap.slotActive);
+  const earlyChoiceMode =
+    (snap.runs ?? 0) <= 1 &&
+    (snap.wave ?? 1) <= 2;
 
   const eventDef = snap.pendingEvent ? EVENTS[snap.pendingEvent] : null;
   const gameplayChoiceOpen = !!snap.cardChoices || !!snap.slotActive;
@@ -383,10 +386,16 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const controlsBlocked = blockingDecisionOpen || gameplayChoiceOpen || showPauseMenu;
   const showDemonSpeech =
     !!snap.demonLine &&
+    !gameplayChoiceOpen &&
+    !blockingDecisionOpen &&
     (snap.bossActive || snap.demonMood === 'urgent');
   const onboardingAdvancedUnlocked =
     (snap.runs ?? 0) >= 2 ||
     (snap.stage ? snap.stage.index > 1 : true);
+  const showSynergyHud =
+    activeSynergyCount >= 2 ||
+    !!snap.bossActive ||
+    (onboardingAdvancedUnlocked && (snap.wave ?? 1) >= 3);
   const showAssistControls =
     snap.autoReveal ||
     snap.speed !== 1 ||
@@ -395,18 +404,19 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const castleUnderRealPressure =
     !!snap.heroNearCastle &&
     (
-      (snap.aliveHeroes ?? 0) >= 2 ||
-      snap.mp < snap.cardCost ||
-      hpRatio < 0.6
+      ((snap.aliveHeroes ?? 0) >= 2 && snap.mp < snap.cardCost) ||
+      hpRatio < 0.55
     );
   const rallyUrgent =
     castleUnderRealPressure ||
     !!(snap.bossActive && snap.aliveHeroes && snap.aliveHeroes > 0) ||
-    ((snap.aliveHeroes ?? 0) >= 3 && snap.mp < snap.cardCost);
+    (!!snap.heroNearCastle && (snap.aliveHeroes ?? 0) >= 3 && snap.mp < snap.cardCost);
   const rallyFirstLesson =
     (snap.runs ?? 0) <= 1 &&
     (snap.rallyUsedCount ?? 0) === 0 &&
     (snap.wave ?? 1) <= 2 &&
+    !!snap.heroNearCastle &&
+    snap.mp < snap.cardCost &&
     (snap.aliveHeroes ?? 0) > 0;
   const shouldSurfaceRally =
     (snap.aliveMonsters ?? 0) > 0 &&
@@ -415,10 +425,18 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       rallyUrgent ||
       rallyFirstLesson
     );
-  const showRallyControl = shouldSurfaceRally || snap.rallyActiveT > 0;
+  const showRallyControl = (snap.rallyReady && shouldSurfaceRally) || snap.rallyActiveT > 0;
   const showControlRow = showRallyControl || showAssistControls;
   const monsterCap = snap.monsterCap ?? 14;
   const monsterFull = (snap.aliveMonsters ?? 0) >= monsterCap;
+  const emergencyRevealAvailable =
+    snap.mp < snap.cardCost &&
+    !snap.emergencyRevealUsed &&
+    (
+      hpRatio < 0.2 ||
+      (hpRatio < 0.3 && (snap.aliveMonsters ?? 0) < 4) ||
+      ((snap.aliveMonsters ?? 0) <= 0 && (snap.aliveHeroes ?? 0) > 0)
+    );
   const topHeaderMissions = (snap.activeMissions || []) as any[];
   const topMission = (() => {
     const best = topHeaderMissions
@@ -449,22 +467,30 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   })();
   const waveBalanceText = (() => {
     if (snap.waveSpawned == null || !snap.waveTotal) return null;
-    if (snap.waveSpawned >= snap.waveTotal && snap.aliveHeroes === 0) return `진행중`;
+    if (snap.waveSpawned >= snap.waveTotal && snap.aliveHeroes === 0) return `정리 중`;
     if (snap.aliveHeroes === 0) return `${snap.waveSpawned}/${snap.waveTotal} · 곧 생성`;
-    return `${snap.waveSpawned}/${snap.waveTotal} · 적 ${snap.aliveHeroes}`;
+    return `${snap.waveSpawned}/${snap.waveTotal} · ${snap.aliveHeroes}명`;
   })();
   const topMissionText = snap.gameMode === 'daily' && topMission ? `📜 ${topMission}` : null;
   const showTopSummary = !isFirstCardReveal && !gameplayChoiceOpen && !snap.cardChoices && !snap.slotActive;
+  const showTopSummaryContext =
+    !!topMissionText ||
+    !!snap.challengeId ||
+    (!!snap.stratum && !snap.stage?.name && (snap.wave ?? 1) > 1);
   const battleCoach = (() => {
     const aliveHeroes = snap.aliveHeroes ?? 0;
     const aliveMonsters = snap.aliveMonsters ?? 0;
     const canRallyNow = aliveMonsters > 0 && !!snap.rallyReady && showRallyControl;
+    const lastChanceReady = emergencyRevealAvailable;
     if (snap.bossActive && snap.bossNext) {
       return {
         tone: snap.bossNext.danger ? 'danger' : 'warn',
         label: '보스 패턴',
         text: `${snap.bossNext.label}${snap.bossNext.sec > 0 && !snap.bossNext.label.includes('s') ? ` ${snap.bossNext.sec.toFixed(1)}s` : ''}`,
       };
+    }
+    if (lastChanceReady) {
+      return null;
     }
     if (snap.heroNearCastle) {
       return {
@@ -482,17 +508,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     if (aliveHeroes >= 3) {
       return { tone: 'warn', label: '다수 침입', text: '물량·광역·원거리 카드 우선' };
     }
-    if (snap.mp < snap.cardCost) {
-      return {
-        tone: 'quiet',
-        label: '마력 대기',
-        text: aliveHeroes > 0 ? '처치하면 마력이 빨리 회복됩니다' : '곧 다음 카드를 펼칠 수 있습니다',
-      };
-    }
-    if ((snap.cardRevealCount ?? 0) <= 2) {
-      return { tone: 'good', label: '초반 목표', text: '같은 카드 3장으로 진화 노리기' };
-    }
-    return { tone: 'good', label: '전선 안정', text: '진화·시너지 카드부터 고르기' };
+    return null;
   })();
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
@@ -667,7 +683,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
   const handleFieldDown = () => {
     fieldDidGrasp.current = false;
-    if (isFieldBlocked()) return;
+    if (isFieldBlocked() || !onboardingAdvancedUnlocked) return;
     fieldPressStart.current = performance.now();
     setFieldPressProgress(0.001);
     const tick = () => {
@@ -700,6 +716,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   const handleFieldTap = () => {
     if (fieldDidGrasp.current) { fieldDidGrasp.current = false; return; }
     if (isFieldBlocked()) return;
+    if (!showRallyControl || !snap.rallyReady) return;
     eng()?.rally();
   };
 
@@ -747,7 +764,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
         <>
           <div style={styles.castleWarn} />
           {/* QA M-4: 마력 부족 + 적 침투 시 ⚡돌격 추천 컨텍스트 힌트 */}
-          {snap.mp < snap.cardCost && snap.rallyReady && (snap.aliveMonsters ?? 0) > 0 && !snap.cardChoices && !snap.slotActive && (
+          {false && snap.mp < snap.cardCost && snap.rallyReady && (snap.aliveMonsters ?? 0) > 0 && !snap.cardChoices && !snap.slotActive && (
             <div style={styles.contextHint}>⚡ 돌격 추천</div>
           )}
         </>
@@ -805,7 +822,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       )}
 
       {/* QO Q-1: 상단 진행 요약 한 줄 — 다중 라벨 스택 제거 */}
-      {showTopSummary && !snap.bossActive && (
+      {showTopSummary && !snap.bossActive && showTopSummaryContext && (
         <div style={styles.topSummary}>
           <div style={styles.topSummaryText}>{topHeaderText}</div>
           {topMissionText && <div style={styles.topSummarySub}>{topMissionText}</div>}
@@ -830,17 +847,17 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
 
       {/* 시너지 — 컴팩트 모드 (활성 개수 + 임박 시그널만 / 탭 시 펼침) */}
       {/* QA H-4: 첫 카드 픽 시 시너지 칩 숨김 */}
-      {!isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && activeSynergyCount > 0 && (
+      {showSynergyHud && !isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && activeSynergyCount > 0 && (
         <button
           style={styles.synergyCompact}
           onClick={() => setSynergyExpanded(!synergyExpanded)}
-          aria-label="시너지 보기"
+          aria-label="빌드 효과 보기"
         >
-          🌀 {activeSynergyCount}활성
+          빌드 {activeSynergyCount}
           <span style={styles.synergyTapHint}>↗</span>
         </button>
       )}
-      {!isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && synergyExpanded && (
+      {showSynergyHud && !isFirstCardReveal && !gameplayChoiceOpen && !blockingDecisionOpen && synergyExpanded && (
         <div style={styles.synergyExpandedPanel} onClick={() => setSynergyExpanded(false)}>
           {snap.synergyProgress?.map((sp: any) => (
             <div
@@ -860,7 +877,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 웨이브 진행도 (보스 아닐 때만) */}
       {!snap.bossActive && snap.waveTotal > 0 && (
         <div style={styles.waveProgress}>
-          <span style={styles.waveProgressLabel}>적</span>
+          <span style={styles.waveProgressLabel}>침입</span>
           <div style={styles.waveProgressBar}>
             <div
               style={{
@@ -905,7 +922,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     ? `⚠ ${snap.aliveMonsters}/${monsterCap} — 처치 후 다시 펼치기`
                     : snap.autoReveal && snap.cardChoices
                       ? `🔁 자동 선택 ${(snap.autoPickT ?? 0).toFixed(1)}s`
-                      : '운명의 카드 — 한 장을 선택하세요'}
+                      : earlyChoiceMode
+                        ? '한 장 선택 = 바로 소환'
+                        : '운명의 카드 — 한 장을 선택하세요'}
             </div>
           </div>
         )}
@@ -982,7 +1001,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   if (def.tags.includes('tank') && (def.aoe || def.knockback)) return { icon: '💥', label: '제압', hint: '뭉친 적을 밀어냅니다' };
                   if (def.tags.includes('tank')) return { icon: '🛡', label: '버팀', hint: '성 앞을 오래 버팁니다' };
                   if (def.tags.includes('magic') && def.range > 60) return { icon: '🔮', label: '원거리', hint: '뒤에서 안전하게 녹입니다' };
-                  if (def.summonCount && def.summonCount > 1) return { icon: '☠', label: '물량', hint: '여러 마리로 라인을 채웁니다' };
+                  if (def.summonCount && def.summonCount > 1) return { icon: '☠', label: '물량', hint: '저렴하게 전열을 보강합니다' };
                   if (def.revive) return { icon: '♻', label: '부활', hint: '쓰러져도 다시 일어납니다' };
                   if (def.range > 60) return { icon: '🏹', label: '원거리', hint: '멀리서 먼저 때립니다' };
                   if (def.spd >= 22) return { icon: '⚔', label: '속공', hint: '빠르게 달려 시간을 벌어요' };
@@ -1004,6 +1023,14 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   (snap.tankCostReliefUses ?? 0) < (snap.tankCostReliefLimit ?? 2);
                 const cardRecommendation = (() => {
                   if (!def) return null;
+                  if (earlyChoiceMode) {
+                    if ((snap.aliveMonsters ?? 0) <= 0 && (snap.aliveHeroes ?? 0) > 0) {
+                      if (def.tags.includes('tank') || (def.summonCount ?? 1) > 1 || def.revive) return '전열 보강';
+                    }
+                    if (snap.heroNearCastle && (def.tags.includes('tank') || def.knockback || def.revive)) return '성문 방어';
+                    if ((snap.aliveHeroes ?? 0) >= 3 && (def.aoe || def.knockback || (def.summonCount ?? 1) > 1)) return '다수 대응';
+                    return null;
+                  }
                   if (evoImminent) return '진화 완성';
                   if (synergyTrigger) return `${synergyTrigger.name} 완성`;
                   if ((snap.aliveMonsters ?? 0) <= 0 && (snap.aliveHeroes ?? 0) > 0) {
@@ -1053,12 +1080,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       <span style={{ ...styles.cardRarity, color: accent }}>
                         {role.icon} {role.label}
                       </span>
-                      {!isFirstCardReveal && (
+                      {!earlyChoiceMode && (
                         <span style={styles.cardStar}>{'★'.repeat(def?.star || 1)}</span>
                       )}
                     </div>
                     {/* ACC A-2: 색맹 보조 — 등급명 텍스트 라벨 (rare 이상만 노출, 정보 과부하 방지) */}
-                    {!isFirstCardReveal && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary') && (
+                    {!earlyChoiceMode && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary') && (
                       <div style={{ ...styles.rarityLabel, color: accent, borderColor: accent }}>
                         {rarity === 'legendary' ? '전설' : rarity === 'epic' ? '영웅' : '희귀'}
                       </div>
@@ -1067,32 +1094,33 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     {cardRecommendation && (
                       <div style={styles.cardRecommendation}>추천 · {cardRecommendation}</div>
                     )}
-                    {isFirstCardReveal && (
+                    {earlyChoiceMode && (
                       <div style={styles.cardRoleHint}>{role.hint}</div>
                     )}
-                    {!isFirstCardReveal && (
+                    {!earlyChoiceMode && (
                       <div style={styles.cardStats}>
-                        <span style={styles.cardStat}>HP {def?.hp ?? '?'}</span>
-                        <span style={styles.cardStat}>ATK {def?.atk ?? '?'}</span>
+                        <span style={styles.cardStat}>체력 {def?.hp ?? '?'}</span>
+                        <span style={styles.cardStatDivider}>·</span>
+                        <span style={styles.cardStat}>공격 {def?.atk ?? '?'}</span>
                       </div>
                     )}
                     {/* OVERHAUL §3.2: 리스크 카드 페널티 표시 */}
-                    {snap.riskCardSlot && snap.riskCardSlot.idx === i && (
+                    {!earlyChoiceMode && snap.riskCardSlot && snap.riskCardSlot.idx === i && (
                       <div style={styles.cardRiskBadge}>
                         ⚠ {snap.riskCardSlot.name}
                       </div>
                     )}
                     {/* QA H-5: 트레이드오프는 모든 런에서 표시 — legendary 페널티 사전 경고 */}
-                    {!isFirstCardReveal && rarity === 'legendary' && (
+                    {!earlyChoiceMode && rarity === 'legendary' && (
                       <div style={styles.cardTradeoff}>⚠ 픽 시 마력 -50</div>
                     )}
-                    {!isFirstCardReveal && def?.tags.includes('tank') && tankCostReliefAvailable && (snap.cardRevealCount ?? 0) > 2 && (
+                    {!earlyChoiceMode && def?.tags.includes('tank') && tankCostReliefAvailable && (snap.cardRevealCount ?? 0) > 2 && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 비용 완화</div>
                     )}
-                    {!isFirstCardReveal && def?.tags.includes('magic') && rarity !== 'legendary' && (
+                    {!earlyChoiceMode && def?.tags.includes('magic') && rarity !== 'legendary' && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 마법 등장률 ↑</div>
                     )}
-                    {evoImminent && (
+                    {!earlyChoiceMode && evoImminent && (
                       <>
                         <div style={styles.cardBadgeEvolveStrong}>
                           ⚡ 진화 발동!
@@ -1100,12 +1128,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                         <div style={styles.cardBadgeEvolveHint}>← 픽 = 즉시 진화</div>
                       </>
                     )}
-                    {!evoImminent && synergyTrigger && (
+                    {!earlyChoiceMode && !evoImminent && synergyTrigger && (
                       <div style={styles.cardBadgeSynergy}>
                         + {synergyTrigger.name}
                       </div>
                     )}
-                    {!evoImminent && !synergyTrigger && aliveSame > 0 && def?.evolveTo && (
+                    {!earlyChoiceMode && !evoImminent && !synergyTrigger && aliveSame > 0 && def?.evolveTo && (
                       <div style={styles.cardBadgeProgress}>
                         진화 {aliveSame + 1}/{snap.evoNeed} (살아있는)
                       </div>
@@ -1139,7 +1167,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
           </>
         )}
 
-        {!gameplayChoiceOpen && !blockingDecisionOpen && !showPauseMenu && battleCoach && (
+        {!gameplayChoiceOpen && !blockingDecisionOpen && !showPauseMenu && !firstSpinPulse && battleCoach && (
           <div style={{
             ...styles.battleCoach,
             ...(battleCoach.tone === 'danger' ? styles.battleCoachDanger : {}),
@@ -1158,11 +1186,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
             const cantReveal = snap.mp < snap.cardCost;
             const fieldFull = monsterFull && !snap.slotActive && !snap.cardChoices;
             const busy = gameplayChoiceOpen || blockingDecisionOpen || showPauseMenu || spinRequestPending;
-            const lastChanceReveal =
-              cantReveal &&
-              !snap.emergencyRevealUsed &&
-              (snap.aliveMonsters ?? 0) <= 0 &&
-              (snap.aliveHeroes ?? 0) > 0;
+            const lastChanceReveal = emergencyRevealAvailable;
             const disabled = (cantReveal && !lastChanceReveal) || fieldFull || busy;
             const revealLooksMuted = (cantReveal && !lastChanceReveal) || fieldFull;
             const src = disabled
@@ -1213,14 +1237,16 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 }}>
                   {spinRequestPending || snap.slotActive
                     ? '─'
-                    : fieldFull
-                      ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
-                    : lastChanceReveal
-                      ? '무료 카드 1회'
+                      : fieldFull
+                        ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
+                      : lastChanceReveal
+                        ? '위기 무료 카드'
                     : cantReveal
                       ? (snap.aliveMonsters ?? 0) > 0
                         ? `${missingMp} 마력 더 · 처치하면 회복`
-                        : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
+                        : (snap.aliveHeroes ?? 0) > 0
+                          ? `${missingMp} 마력 더 · 약 ${waitSeconds}초`
+                          : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
                       : (snap.cardRevealCount ?? 0) < 2
                         ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
                         : `🔮 ${snap.cardCost} 마력`}
@@ -1247,10 +1273,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               : snap.ultiGauge >= 0.5
                 ? '/sprites/btn_ulti_charging_50.png'
                 : '/sprites/btn_ulti_charging_0.png';
-            const showUltButton =
-              snap.ultiReady ||
-              snap.ultiGauge >= 0.85 ||
-              (snap.bossActive && snap.ultiGauge >= 0.6);
+	            const showUltButton =
+	              snap.ultiReady ||
+	              snap.ultiGauge >= 0.85;
             if (!showUltButton) return null;
             // 필살기 변형 — 0:어둠 파동(🌊) / 1:지옥 소환(🔥) / 2:암흑 멸망(💀)
             const variantIcons = ['🌊', '🔥', '💀'];
@@ -2342,7 +2367,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   battleCoachLabel: {
     color: '#FDCB6E',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
     letterSpacing: 1,
     whiteSpace: 'nowrap',
@@ -2350,7 +2375,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   battleCoachText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 700,
     letterSpacing: 0.5,
     overflow: 'hidden',
@@ -2446,7 +2471,7 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center', margin: '2px 0 1px',
   },
   cardRoleHint: {
-    fontSize: 8,
+    fontSize: 9,
     lineHeight: 1.35,
     color: '#dfe6ff',
     textAlign: 'center',
@@ -2458,13 +2483,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   cardStar: { fontSize: 9, color: '#FDCB6E', textShadow: '1px 1px 0 #000' },
   cardStats: {
-    display: 'flex', justifyContent: 'space-between',
+    display: 'flex', justifyContent: 'center', gap: 4,
     fontSize: 9, color: '#bbb',
     background: 'rgba(0,0,0,0.45)',
     padding: '2px 5px', borderRadius: 3,
     marginTop: 1,
   },
   cardStat: { letterSpacing: 0.3 },
+  cardStatDivider: { color: '#6d6880' },
   cardTradeoff: {
     fontSize: 8, color: '#FF7675',
     background: 'rgba(214,48,49,0.2)',

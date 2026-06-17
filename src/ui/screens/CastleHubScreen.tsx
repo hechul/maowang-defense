@@ -115,12 +115,12 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         <div style={styles.ctaTop}>{isFirstVisit ? '첫 목표' : nextStage ? '다음 침공 막기' : '심연 방어전'}</div>
         <div style={styles.ctaName}>
           {isFirstVisit
-            ? '⚔ 바로 전투 시작'
+            ? '⚔ 첫 침입 시작'
             : nextStage ? `${nextStage.icon ?? '⚔'} ${nextStage.name}` : '⚔ 전투 시작'}
         </div>
         <div style={styles.ctaSub}>
           {isFirstVisit
-            ? '카드 3장 중 하나를 골라 5웨이브만 막아보세요'
+            ? '부하를 소환해 5웨이브만 막아보세요'
             : nextStage
             ? nextStageRewardText
             : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
@@ -174,7 +174,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          <>처음 목표는 하나입니다. <b>바로 전투 시작</b>을 눌러 5웨이브만 막아보세요.</>
+          <>처음 목표는 하나입니다. <b>첫 침입 시작</b>을 눌러 5웨이브만 막아보세요.</>
         </div>
       )}
 

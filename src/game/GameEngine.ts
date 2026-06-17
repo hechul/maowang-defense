@@ -2964,7 +2964,7 @@ export class GameEngine {
     const natural = 1.8 * surge * mpRegenMul * this.stageMod.mpRegenMul;
     const noDefenseRecovery =
       this.monsters.every((m) => m.dead) && this.heroes.some((h) => !h.dead)
-        ? 4.8
+        ? 14.0
         : 0;
     const relicAdd = this.fusedEffectAdd('mpRegenAdd');
     const secretAdd = this._secretsAggregate.mpRegenAdd;
@@ -3761,8 +3761,7 @@ export class GameEngine {
   /* ===== Helpers ===== */
   private addMP(amt: number) { this.mp = Math.min(this.mpMax, this.mp + amt); }
   private currentEmergencyRevealMaxUses() {
-    const newbieBonus = useSaveStore.getState().runs <= 1 ? 1 : 0;
-    return 1 + this.demonPower.emergencyRevealExtra + newbieBonus;
+    return 1 + this.demonPower.emergencyRevealExtra;
   }
   private _lastShakeAt = 0;
   private shakeFx(amt: number) {
