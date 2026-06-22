@@ -120,7 +120,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         </div>
         <div style={styles.ctaSub}>
           {isFirstVisit
-            ? '부하를 소환해 5웨이브만 막아보세요'
+            ? '부하를 소환해 5웨이브 보스까지 막아보세요'
             : nextStage
             ? nextStageRewardText
             : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
@@ -142,11 +142,12 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
         <div style={isFirstVisit ? styles.roomsGridFirstVisit : styles.roomsGrid}>
           <RoomTile
             icon="🏛"
-            label="영혼 강화"
-            hint={isFirstVisit ? '전투 후 성장' : upgradeHint}
+            label={isFirstVisit ? '영혼 강화 잠김' : '영혼 강화'}
+            hint={isFirstVisit ? '첫 전투 후 열림' : upgradeHint}
             badge={!isFirstVisit && upgradableSkills > 0 ? String(upgradableSkills) : null}
             accent="#FDCB6E"
             highlighted={!isFirstVisit && upgradableSkills > 0}
+            disabled={isFirstVisit}
             onClick={() => onNavigate('skills')}
           />
           {!isFirstVisit && (
@@ -174,7 +175,7 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
 
       {runs === 0 && (
         <div style={styles.firstHint}>
-          <>처음 목표는 하나입니다. <b>첫 침입 시작</b>을 눌러 5웨이브만 막아보세요.</>
+          <>처음 목표는 하나입니다. <b>첫 침입 시작</b>을 눌러 5웨이브 보스까지 막아보세요.</>
         </div>
       )}
 
@@ -194,13 +195,14 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
   );
 }
 
-function RoomTile({ icon, label, hint, badge, accent, highlighted, onClick }: {
+function RoomTile({ icon, label, hint, badge, accent, highlighted, disabled, onClick }: {
   icon: string;
   label: string;
   hint: string;
   badge: string | null;
   accent: string;
   highlighted?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -208,12 +210,20 @@ function RoomTile({ icon, label, hint, badge, accent, highlighted, onClick }: {
       style={{
         ...styles.room,
         borderColor: accent,
+        ...(disabled ? styles.roomDisabled : {}),
         ...(highlighted ? styles.roomHighlighted : {}),
         boxShadow: highlighted
           ? `0 3px 0 #15102a, 0 0 14px ${accent}88`
-          : `0 3px 0 #15102a, 0 0 6px ${accent}55`,
+          : disabled
+            ? '0 3px 0 #15102a'
+            : `0 3px 0 #15102a, 0 0 6px ${accent}55`,
       }}
-      onClick={onClick}
+      onClick={() => {
+        if (disabled) return;
+        onClick();
+      }}
+      disabled={disabled}
+      aria-disabled={disabled}
     >
       <div style={styles.roomIcon}>{icon}</div>
       <div style={styles.roomLabel}>{label}</div>
@@ -386,6 +396,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   roomHighlighted: {
     background: 'linear-gradient(180deg,#4a351f,#1a1230)',
+  },
+  roomDisabled: {
+    opacity: 0.58,
+    cursor: 'not-allowed',
+    filter: 'grayscale(0.35)',
   },
   roomIcon: { fontSize: 24, lineHeight: 1, marginBottom: 4 },
   roomLabel: { fontSize: 11, fontWeight: 'bold', letterSpacing: 1, lineHeight: 1.35 },

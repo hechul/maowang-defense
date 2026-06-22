@@ -158,12 +158,14 @@ function CardChoiceButton({
   style,
   className,
   disabled = false,
+  ariaLabel,
   children,
 }: {
   onPick: () => void;
   style: React.CSSProperties;
   className?: string;
   disabled?: boolean;
+  ariaLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -174,6 +176,7 @@ function CardChoiceButton({
         opacity: disabled ? 0.72 : style.opacity,
       }}
       className={className}
+      aria-label={ariaLabel}
       onClick={() => {
         if (disabled) return;
         onPick();
@@ -1046,6 +1049,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 return (
                   <div key={`${id}-${i}-${snap.kills}`} style={styles.cardWrap}>
                   <CardChoiceButton
+                    ariaLabel={[
+                      `${def?.name || id} 소환`,
+                      `${role.label} 역할`,
+                      cardRecommendation ? `추천: ${cardRecommendation}` : role.hint,
+                      earlyChoiceMode ? '선택하면 바로 전장에 나옵니다' : `체력 ${def?.hp ?? '?'}, 공격 ${def?.atk ?? '?'}`,
+                    ].join('. ')}
                     onPick={() => {
                       if (cardPickPendingRef.current) return;
                       cardPickPendingRef.current = true;
@@ -1093,6 +1102,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     <div style={styles.cardName}>{def?.name || id}</div>
                     {cardRecommendation && (
                       <div style={styles.cardRecommendation}>추천 · {cardRecommendation}</div>
+                    )}
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && (
+                      <div style={styles.cardActionHint}>탭해서 소환</div>
                     )}
                     {earlyChoiceMode && (
                       <div style={styles.cardRoleHint}>{role.hint}</div>
@@ -1198,6 +1210,30 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               : 1;
             const missingMp = Math.max(0, snap.cardCost - snap.mp);
             const waitSeconds = Math.ceil(missingMp / Math.max(0.5, snap.mpRegenPerSec ?? 2.4));
+            const revealMainText = spinRequestPending || snap.slotActive
+              ? '봉인 깨는 중...'
+              : fieldFull
+                ? '군단 가득 참'
+              : lastChanceReveal
+                ? '무료 카드 펼치기'
+              : cantReveal
+                ? '마력 충전 중'
+              : '카드 펼치기';
+            const revealSubText = spinRequestPending || snap.slotActive
+              ? '─'
+              : fieldFull
+                ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
+              : lastChanceReveal
+                ? '성문 위기 · 지금 누르기'
+              : cantReveal
+                ? (snap.aliveMonsters ?? 0) > 0
+                  ? `${missingMp} 부족 · 처치하면 카드 가능`
+                  : (snap.aliveHeroes ?? 0) > 0
+                    ? `약 ${waitSeconds}초 뒤 카드 가능`
+                    : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
+              : (snap.cardRevealCount ?? 0) < 2
+                ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
+                : `🔮 ${snap.cardCost} 마력`;
             return (
               <button
                 style={{
@@ -1215,41 +1251,20 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 }}
                 disabled={disabled}
                 className={firstSpinPulse ? 'spin-pulse' : ''}
+                aria-label={`${revealMainText}. ${revealSubText}`}
               >
                 <span style={{
                   ...styles.btnRevealTop,
                   ...(revealLooksMuted ? styles.btnRevealTopMuted : {}),
                   ...(lastChanceReveal ? styles.btnRevealTopEmergency : {}),
                 }}>
-                  {spinRequestPending || snap.slotActive
-                    ? '봉인 깨는 중...'
-                    : fieldFull
-                      ? '군단 가득 참'
-                    : lastChanceReveal
-                      ? '라스트 찬스'
-                    : cantReveal
-                      ? '마력 충전 중'
-                      : '카드 펼치기'}
+                  {revealMainText}
                 </span>
                 <span style={{
                   ...styles.btnRevealSub,
                   ...(revealLooksMuted ? styles.btnRevealSubMuted : {}),
                 }}>
-                  {spinRequestPending || snap.slotActive
-                    ? '─'
-                      : fieldFull
-                        ? `${snap.aliveMonsters}/${monsterCap} 처치 후 가능`
-                      : lastChanceReveal
-                        ? '위기 무료 카드'
-                    : cantReveal
-                      ? (snap.aliveMonsters ?? 0) > 0
-                        ? `${missingMp} 마력 더 · 처치하면 회복`
-                        : (snap.aliveHeroes ?? 0) > 0
-                          ? `${missingMp} 마력 더 · 약 ${waitSeconds}초`
-                          : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
-                      : (snap.cardRevealCount ?? 0) < 2
-                        ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
-                        : `🔮 ${snap.cardCost} 마력`}
+                  {revealSubText}
                   {/* INPUT I-3: 잠긴 카드 표시 — 다음 펼치기 시 유지될 카드 명시 */}
                   {snap.lockedCardId && MONSTERS[snap.lockedCardId] && (
                     <span style={{ marginLeft: 6, color: '#26de81' }}>
@@ -2525,6 +2540,16 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.4,
     textShadow: 'none',
     boxShadow: '0 0 6px rgba(253,203,110,0.55)',
+  },
+  cardActionHint: {
+    fontSize: 8,
+    color: '#DFE6FF',
+    background: 'rgba(116,185,255,0.16)',
+    border: '1px solid rgba(116,185,255,0.28)',
+    borderRadius: 3,
+    padding: '2px 4px',
+    textAlign: 'center',
+    letterSpacing: 0.4,
   },
   cardBadgeEvolve: {
     fontSize: 9, color: '#15082a',

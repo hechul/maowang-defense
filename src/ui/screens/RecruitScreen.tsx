@@ -144,7 +144,7 @@ export function RecruitScreen({ onBack, onGoStageSelect }: Props) {
               disabled={!canRecruit}
               onClick={() => onRecruit(rec)}
             >
-              💎 {rec.cost.soulstones}
+              모집 💎 {rec.cost.soulstones}
               {stonesShort > 0 && (
                 <div style={styles.shortLabel}>−{stonesShort} 부족</div>
               )}

@@ -1178,6 +1178,13 @@ export class GameEngine {
     this.waveTotal = this.runMode === 'stage'
       ? Math.max(2, Math.floor(stageWaveTotal * this.stageMod.waveTotalMul))
       : baseWaveTotal;
+    if (
+      this.runMode === 'stage' &&
+      this.runStageDef?.id === 'ch1_s1' &&
+      this.wave === this.runStageDef.waveLimit
+    ) {
+      this.waveTotal = 0;
+    }
     this.waveCleared = false;
     this.waveTimer = this.wave === 1 ? 2.0 : 1.0;
     this.bossSpawned = false;
@@ -3067,6 +3074,9 @@ export class GameEngine {
     this.slot.reelStopped = [false, false, false];
     this.slot.tickTimers = [0, 0, 0];
     this.slot.flashTimers = [0, 0, 0];
+    // UX safety: if the reel animation stalls in a throttled/background tab, never leave
+    // the player staring at "breaking seal..." for several seconds.
+    this.safeTimeout(() => this.forceFinishSlotReveal(), 1800);
     return true;
   }
 
@@ -3441,8 +3451,12 @@ export class GameEngine {
   /** Tap-to-skip — 카드 공개 즉시 종료 (짧은 연출 시간 후 허용) */
   skipSlotReveal() {
     if (!this.slot.active) return;
-    // 0.5초 경과 후만 (가장 마지막 reelStop이 1.1 → 0.6 이하면 허용)
-    if (this.slot.reelStops[2] > 0.6) { Audio.ui_error(); return; }
+    this.forceFinishSlotReveal(100);
+    Audio.ui_tap();
+  }
+
+  private forceFinishSlotReveal(finalizeDelay = 0) {
+    if (!this.slot.active || this.slot.finished) return;
     // 모든 릴 타이머 0 + 결과 위치로 점프
     for (let i = 0; i < 3; i++) {
       this.slot.reelStops[i] = 0;
@@ -3451,9 +3465,9 @@ export class GameEngine {
       this.slot.reelStopped[i] = true;
       this.slot.flashTimers[i] = 0.15;
     }
+    this.slot.finished = true;
     this.slot.active = false;
-    this.safeTimeout(() => this.finalizeSlot(), 100);
-    Audio.ui_tap();
+    this.safeTimeout(() => this.finalizeSlot(), finalizeDelay);
   }
 
   /** 카드 잠금 — 마력 50 소모, 다음 카드 펼치기에서 유지 */
