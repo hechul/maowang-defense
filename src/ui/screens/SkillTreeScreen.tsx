@@ -143,7 +143,7 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
         )}
         <div style={styles.desc}>{sd.desc(maxed ? rank : rank + 1)}</div>
         <div style={{ ...styles.cost, color: maxed ? '#FFEAA7' : (canAfford ? '#FDCB6E' : '#888') }}>
-          {maxed ? 'MAX' : `${cost} 영혼석`}
+          {maxed ? 'MAX' : `강화 ${cost} 영혼석`}
         </div>
       </button>
     );

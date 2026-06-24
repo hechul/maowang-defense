@@ -141,6 +141,7 @@ export const STAGES: StageDefinition[] = [
     bossId: 'archmage',
     stratumId: 'forgotten_grave',
     recommendedTags: ['undead', 'zombie'],
+    stageModifier: { heroHpMul: 0.82, heroAtkMul: 0.9, mpRegenMul: 1.1, waveTotalMul: 0.62 },
     unlockCondition: { clearedStageId: 'ch1_s1', bestWaveAtLeast: 5 },
     firstClearReward: {
       soulstones: 200,

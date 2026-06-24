@@ -122,10 +122,24 @@ export function CastleHubScreen({ onNavigate, onStartStage }: Props) {
           {isFirstVisit
             ? '부하를 소환해 5웨이브 보스까지 막아보세요'
             : nextStage
-            ? nextStageRewardText
+            ? upgradableSkills > 0
+              ? `강화 ${upgradableSkills}개 가능 · 정비 후 도전 추천`
+              : nextStageRewardText
             : '카드 3장 중 하나를 골라 마왕성을 지키세요'}
         </div>
       </button>
+
+      {!isFirstVisit && upgradableSkills > 0 && (
+        <section style={styles.recommendStrip} aria-label="추천 진행 순서">
+          <div>
+            <div style={styles.recommendLabel}>추천 순서</div>
+            <div style={styles.recommendText}>영혼 강화로 카드 비용·성 체력을 먼저 보강하세요.</div>
+          </div>
+          <button style={styles.recommendBtn} onClick={() => onNavigate('skills')}>
+            강화하기
+          </button>
+        </section>
+      )}
 
       {showMapStrip && (
         <section style={styles.mapStrip} aria-label="작전 지도">
@@ -337,6 +351,44 @@ const styles: Record<string, React.CSSProperties> = {
   ctaTop: { fontSize: 10, color: '#FDCB6E', letterSpacing: 2, marginBottom: 2 },
   ctaName: { fontSize: 18, fontWeight: 'bold', letterSpacing: 1, lineHeight: 1.35 },
   ctaSub: { fontSize: 9, color: '#FFEAA7', marginTop: 3, opacity: 0.9, lineHeight: 1.45 },
+  recommendStrip: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    margin: '-2px 0 10px',
+    padding: '8px 9px',
+    borderRadius: 7,
+    border: '1px solid #FDCB6E',
+    background: 'linear-gradient(180deg,rgba(253,203,110,0.18),rgba(20,12,42,0.72))',
+    boxShadow: '0 2px 0 #15102a, 0 0 10px rgba(253,203,110,0.22)',
+  },
+  recommendLabel: {
+    fontSize: 8,
+    color: '#FDCB6E',
+    letterSpacing: 1.4,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  recommendText: {
+    fontSize: 9,
+    color: '#FFEAA7',
+    lineHeight: 1.35,
+  },
+  recommendBtn: {
+    flexShrink: 0,
+    background: 'linear-gradient(180deg,#FDCB6E,#D63031)',
+    border: '1px solid #FFEAA7',
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 'bold',
+    padding: '7px 9px',
+    borderRadius: 5,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    boxShadow: '0 2px 0 #4a0a0a',
+  },
   mapStrip: {
     position: 'relative',
     display: 'flex',

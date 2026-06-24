@@ -495,6 +495,19 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     if (lastChanceReady) {
       return null;
     }
+    if (
+      snap.stage &&
+      snap.wave >= snap.stage.waveLimit &&
+      (snap.waveSpawned ?? 0) >= (snap.waveTotal ?? 1) &&
+      aliveHeroes > 0 &&
+      (snap.ultiReady || (snap.ultiGauge ?? 0) >= 0.85)
+    ) {
+      return {
+        tone: 'warn',
+        label: '마무리 구간',
+        text: snap.ultiReady ? '필살 사용으로 전선 정리' : '필살 충전 임박 · 버티기',
+      };
+    }
     if (snap.heroNearCastle) {
       return {
         tone: 'danger',
@@ -802,7 +815,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* AUTO 모드 인디케이터 (5초 후 페이드) */}
       {snap.autoReveal && autoIndicatorVisible && (
         <div style={{ ...styles.autoIndicator, animation: 'fadeOutLate 5s forwards' }}>
-          🔁 AUTO
+          🔁 자동 선택
         </div>
       )}
 
@@ -1053,7 +1066,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       `${def?.name || id} 소환`,
                       `${role.label} 역할`,
                       cardRecommendation ? `추천: ${cardRecommendation}` : role.hint,
-                      earlyChoiceMode ? '선택하면 바로 전장에 나옵니다' : `체력 ${def?.hp ?? '?'}, 공격 ${def?.atk ?? '?'}`,
+                      '탭하면 바로 전장에 나옵니다',
+                      earlyChoiceMode ? '초반 추천 선택지' : `체력 ${def?.hp ?? '?'}, 공격 ${def?.atk ?? '?'}`,
                     ].join('. ')}
                     onPick={() => {
                       if (cardPickPendingRef.current) return;
@@ -1101,7 +1115,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     )}
                     <div style={styles.cardName}>{def?.name || id}</div>
                     {cardRecommendation && (
-                      <div style={styles.cardRecommendation}>추천 · {cardRecommendation}</div>
+                      <div style={styles.cardRecommendation}>추천 · {cardRecommendation} · 탭해서 선택</div>
                     )}
                     {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && (
                       <div style={styles.cardActionHint}>탭해서 소환</div>
@@ -1335,6 +1349,20 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     color: '#bbb',
                   }}>{chargePct}%</span>
                 )}
+                <span style={{
+                  position: 'absolute',
+                  left: 4,
+                  right: 4,
+                  top: 22,
+                  textAlign: 'center',
+                  fontSize: 8,
+                  lineHeight: 1.2,
+                  color: snap.ultiReady ? '#FFEAA7' : '#dfe6ff',
+                  textShadow: '1px 1px 0 #000, 0 0 4px rgba(0,0,0,0.8)',
+                  letterSpacing: 0.4,
+                }}>
+                  {snap.ultiReady ? '필살 사용' : `필살 ${chargePct}%`}
+                </span>
                 <div style={styles.btnUltiBar}>
                   <div style={{ ...styles.btnUltiBarFill, width: `${snap.ultiGauge * 100}%` }} />
                 </div>
@@ -1384,9 +1412,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   if (!controlsBlocked) eng()?.toggleAuto();
                 }}
                 disabled={controlsBlocked}
-                aria-label="AUTO 토글"
+                aria-label="자동 선택 토글"
               >
-                🔁 {snap.autoReveal ? 'ON' : 'AUTO'}
+                🔁 {snap.autoReveal ? '자동 선택 ON' : '자동 선택'}
               </button>
             )}
             {showAssistControls && (
@@ -1408,7 +1436,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 disabled={controlsBlocked}
                 aria-label="속도 토글"
               >
-                ⏩ ×{snap.speed}
+                ⏩ 속도 ×{snap.speed}
               </button>
             )}
           </div>

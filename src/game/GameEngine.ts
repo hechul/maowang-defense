@@ -390,6 +390,7 @@ export class GameEngine {
   edgeRing = { color: '', a: 0 };
   // 필살기
   ulti = { gauge: 0, max: 100, ready: false };
+  private _clutchUltiGranted = false;
   // 유물/시너지
   relics = new Set<string>();
   activeSynergies = new Set<string>();
@@ -813,6 +814,7 @@ export class GameEngine {
     this.recentCastleDamage = [];
     this._lastKillerTags = undefined;
     this.stageCleared = false;
+    this._clutchUltiGranted = false;
     this._challengeClearedId = null;
     this._challengeFirstClearLabeled = false;
     this._challengeRewardClaimed = false;
@@ -1008,6 +1010,21 @@ export class GameEngine {
         this.monsters.forEach((u) => this.updateUnit(u, stepDt));
         this.heroes.forEach((u) => this.updateUnit(u, stepDt));
         this.updateProjectiles(stepDt);
+      }
+      const finalWaveCleanup =
+        this.runMode === 'stage' &&
+        !!this.runStageDef &&
+        this.wave >= this.runStageDef.waveLimit &&
+        this.waveSpawned >= this.waveTotal &&
+        this.heroes.some((h) => !h.dead) &&
+        this.heroes.some((h) => !h.dead && h.x < 150);
+      if (!this._clutchUltiGranted && finalWaveCleanup && !this.ulti.ready && this.ulti.gauge >= this.ulti.max * 0.9) {
+        this._clutchUltiGranted = true;
+        this.ulti.gauge = this.ulti.max;
+        this.ulti.ready = true;
+        this.showBanner('✨ 필살기 마무리 기회!', '우측 필살 버튼으로 전선을 정리하세요', '#FDCB6E', 1.4);
+        this.flashEdge('#FDCB6E', 0.45);
+        Audio.relic_sfx();
       }
       this.updateParticles(effDt);
       // 이펙트 업데이트
