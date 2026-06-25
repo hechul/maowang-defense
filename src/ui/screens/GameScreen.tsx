@@ -474,6 +474,9 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     if (snap.aliveHeroes === 0) return `${snap.waveSpawned}/${snap.waveTotal} · 곧 생성`;
     return `${snap.waveSpawned}/${snap.waveTotal} · ${snap.aliveHeroes}명`;
   })();
+  const stageProgressText = snap.stage
+    ? `W${snap.wave}/${snap.stage.waveLimit}`
+    : `W${snap.wave}`;
   const topMissionText = snap.gameMode === 'daily' && topMission ? `📜 ${topMission}` : null;
   const showTopSummary = !isFirstCardReveal && !gameplayChoiceOpen && !snap.cardChoices && !snap.slotActive;
   const showTopSummaryContext =
@@ -851,7 +854,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {snap.bossActive && (
         <div style={styles.bossHp}>
           <div style={styles.bossLabel}>
-            {snap.bossName}
+            {stageProgressText} · {snap.bossName}
             {/* UI U-1: 보스 HP % 절대치 — "필살기 한 방?" 추측 가능 */}
             <span style={styles.bossHpPct}> {Math.ceil(snap.bossHp * 100)}%</span>
           </div>
@@ -893,7 +896,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {/* 웨이브 진행도 (보스 아닐 때만) */}
       {!snap.bossActive && snap.waveTotal > 0 && (
         <div style={styles.waveProgress}>
-          <span style={styles.waveProgressLabel}>침입</span>
+          <span style={styles.waveProgressLabel}>{stageProgressText}</span>
           <div style={styles.waveProgressBar}>
             <div
               style={{
@@ -1379,8 +1382,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               const rallyLabel = snap.aliveMonsters <= 0
                 ? '⚡ 부하 필요'
                 : !snap.rallyReady
-                  ? `⚡ 돌격 ${snap.rallyCdT?.toFixed(1)}s`
-                  : '⚡ 돌격';
+                  ? `⚡ 전열 돌격 ${snap.rallyCdT?.toFixed(1)}s`
+                  : '⚡ 전열 돌격';
               return (
                 <button
                   style={{
@@ -1390,6 +1393,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                   }}
                   onClick={() => eng()?.rally()}
                   disabled={rallyDisabled}
+                  aria-label={rallyDisabled ? '전열 돌격 대기' : '전열 돌격. 부하를 앞으로 밀어 시간을 벌어줍니다'}
                 >
                   {rallyLabel}
                 </button>

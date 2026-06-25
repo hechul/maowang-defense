@@ -151,7 +151,13 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={styles.root}>
-      <h2 style={styles.title}>영혼 강화</h2>
+      <div style={styles.topBar}>
+        <button style={styles.topBackBtn} onClick={onBack}>
+          ← 마왕성
+        </button>
+        <h2 style={styles.title}>영혼 강화</h2>
+        <div style={styles.topSpacer} />
+      </div>
       <div style={styles.stonesBar}>
         <span style={styles.stonesLabel}>보유 영혼석</span>
         <span style={styles.stonesNum}>{stones}</span>
@@ -182,7 +188,7 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
       <div style={styles.bottom}>
         {showAdvanced && <button style={styles.btn} onClick={handleReset}>초기화</button>}
         <button style={{ ...styles.btn, ...styles.btnPrimary }} onClick={onBack}>
-          {recentUpgradeId ? '마왕성으로 — 다음 침공' : '마왕성으로'}
+          {recentUpgradeId ? '마왕성으로 — 다음 침공 준비' : '마왕성으로 돌아가기'}
         </button>
       </div>
       <style>{`
@@ -200,12 +206,39 @@ const styles: Record<string, React.CSSProperties> = {
   root: {
     position: 'absolute', inset: 0,
     display: 'flex', flexDirection: 'column',
-    padding: '18px 12px', background: 'rgba(5,3,15,0.96)',
+    padding: '12px 12px 88px', background: 'rgba(5,3,15,0.96)',
     overflow: 'auto',
   },
+  topBar: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+    display: 'grid',
+    gridTemplateColumns: '80px 1fr 80px',
+    alignItems: 'center',
+    gap: 6,
+    margin: '-12px -12px 8px',
+    padding: '10px 12px 8px',
+    background: 'linear-gradient(180deg,rgba(5,3,15,0.98),rgba(5,3,15,0.86))',
+    borderBottom: '1px solid rgba(253,203,110,0.22)',
+    backdropFilter: 'blur(3px)',
+  },
+  topBackBtn: {
+    padding: '7px 6px',
+    background: 'rgba(45,27,78,0.88)',
+    border: '1px solid #4a3a6e',
+    borderRadius: 5,
+    color: '#FFEAA7',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    boxShadow: '0 2px 0 #15102a',
+  },
+  topSpacer: { width: 80 },
   title: {
     color: '#FFEAA7', fontSize: 20, letterSpacing: 3,
-    textAlign: 'center', textShadow: '2px 2px 0 #000', margin: '8px 0 4px',
+    textAlign: 'center', textShadow: '2px 2px 0 #000', margin: 0,
   },
   stonesBar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -346,7 +379,17 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     letterSpacing: 1,
   },
-  bottom: { width: '100%', display: 'flex', gap: 6, marginTop: 10 },
+  bottom: {
+    position: 'sticky',
+    bottom: 0,
+    zIndex: 25,
+    width: '100%',
+    display: 'flex',
+    gap: 6,
+    margin: '10px 0 -76px',
+    padding: '10px 0 12px',
+    background: 'linear-gradient(180deg,rgba(5,3,15,0),rgba(5,3,15,0.98) 24%)',
+  },
   btn: {
     flex: 1, padding: 10, fontSize: 13, fontWeight: 'bold',
     background: '#3a2d5c', border: '2px solid #4a3a6e',
