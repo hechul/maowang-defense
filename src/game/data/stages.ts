@@ -118,7 +118,7 @@ export const STAGES: StageDefinition[] = [
     bossId: 'captain',
     stratumId: 'sealed_gate',
     recommendedTags: ['undead'],
-    stageModifier: { heroHpMul: 0.3, heroAtkMul: 0.75, mpRegenMul: 1.2, waveTotalMul: 0.45 },
+    stageModifier: { heroHpMul: 0.55, heroAtkMul: 0.82, mpRegenMul: 1.05, waveTotalMul: 0.7 },
     unlockCondition: undefined,  // 처음부터 열림
     firstClearReward: {
       // 첫 클리어 보상 — imp 모집 비용(100)보다 큼 → 100 잔여로 다음 진행 가능 (온보딩)

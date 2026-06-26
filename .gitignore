@@ -30,6 +30,8 @@ pnpm-debug.log*
 
 # 앱인토스 빌드 산출물
 .ait
+.granite/
+*.ait
 
 # OS temp files
 .DS_Store

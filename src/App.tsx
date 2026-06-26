@@ -167,6 +167,8 @@ export default function App() {
             onNavigate={setScreen}
             onStartStage={startStage}
             onRetryStage={startStage}
+            onStartEndless={startEndless}
+            onRetryChallenge={startChallenge}
           />}
           {screen === 'skills' && <SkillTreeScreen onBack={goHub} />}
           {screen === 'bestiary' && <BestiaryScreen onBack={goHub} onGoRecruit={() => setScreen('recruit')} />}

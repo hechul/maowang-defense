@@ -73,11 +73,20 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
     () => (Object.keys(SKILLS) as SkillId[]).filter((id) => !CORE_SKILLS.includes(id)),
     [],
   );
+  const suggestedCoreSkillId = useMemo<SkillId | null>(() => {
+    const priority: SkillId[] = runs < 3
+      ? ['cardCost', 'startMp', 'castleHp', 'monAtk', 'monHp']
+      : ['monAtk', 'castleHp', 'cardCost', 'startMp', 'monHp'];
+    const affordable = priority.find((id) => {
+      const rank = skills[id];
+      return rank < SKILLS[id].max && skillCost(id, rank, runs) <= stones;
+    });
+    if (affordable) return affordable;
+    return priority.find((id) => skills[id] < SKILLS[id].max) ?? null;
+  }, [runs, skills, stones]);
   const guidedSkillId: SkillId | null = highlightId && SKILLS[highlightId as SkillId]
     ? highlightId as SkillId
-    : runs < 3
-      ? (skills.cardCost < SKILLS.cardCost.max ? 'cardCost' : 'castleHp')
-      : null;
+    : suggestedCoreSkillId;
   const guideCopy = (() => {
     if (highlightId && SKILLS[highlightId as SkillId]) {
       const skill = SKILLS[highlightId as SkillId];
@@ -86,9 +95,20 @@ export function SkillTreeScreen({ onBack }: { onBack: () => void }) {
         text: `${skill.name}을 먼저 확인하세요. 방금 전투에서 부족했던 지점을 바로 보강합니다.`,
       };
     }
+    if (suggestedCoreSkillId) {
+      const rank = skills[suggestedCoreSkillId];
+      const cost = skillCost(suggestedCoreSkillId, rank, runs);
+      const canAfford = cost <= stones;
+      return {
+        top: canAfford ? '지금 누를 추천 강화' : '다음 목표 강화',
+        text: canAfford
+          ? `${SKILLS[suggestedCoreSkillId].name}을 강화하고 바로 다음 침공에 들어가세요.`
+          : `${SKILLS[suggestedCoreSkillId].name}까지 영혼석 ${Math.max(0, cost - stones)}개가 더 필요합니다.`,
+      };
+    }
     return {
       top: '먼저 이 5개만 보면 됩니다',
-      text: '초반 추천은 카드 비용입니다. 카드를 자주 펼칠수록 전투 흐름을 더 빨리 익힙니다.',
+      text: '핵심 강화가 충분합니다. 다음 침공에서 빌드를 실험해보세요.',
     };
   })();
 
@@ -206,7 +226,7 @@ const styles: Record<string, React.CSSProperties> = {
   root: {
     position: 'absolute', inset: 0,
     display: 'flex', flexDirection: 'column',
-    padding: '12px 12px 88px', background: 'rgba(5,3,15,0.96)',
+    padding: '12px 12px calc(16px + env(safe-area-inset-bottom, 0))', background: 'rgba(5,3,15,0.96)',
     overflow: 'auto',
   },
   topBar: {
@@ -259,7 +279,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 1.5, marginBottom: 3,
   },
   guideText: {
-    color: '#c7bdd6', fontSize: 10, lineHeight: 1.45,
+    color: '#c7bdd6', fontSize: 11, lineHeight: 1.5,
     wordBreak: 'keep-all',
   },
   coreList: {
@@ -311,7 +331,7 @@ const styles: Record<string, React.CSSProperties> = {
   icon: { textAlign: 'center', fontSize: 20, lineHeight: 1, width: 26 },
   nodeTitle: { flex: 1, minWidth: 0 },
   nm: { fontSize: 12, fontWeight: 'bold', color: '#fff', lineHeight: 1.25 },
-  treeLabel: { fontSize: 8, letterSpacing: 0.5, marginTop: 2 },
+  treeLabel: { fontSize: 9, letterSpacing: 0.5, marginTop: 2 },
   rank: { fontSize: 10, color: '#FDCB6E', fontWeight: 'bold' },
   recommendBadge: {
     alignSelf: 'flex-start',
@@ -359,7 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 8,
     textShadow: '1px 1px 0 #000',
   },
-  desc: { fontSize: 10, color: '#bbb', lineHeight: 1.35, minHeight: 0 },
+  desc: { fontSize: 11, color: '#bbb', lineHeight: 1.4, minHeight: 0 },
   cost: {
     textAlign: 'center', fontSize: 10, padding: '4px 0',
     background: '#2a1745', borderRadius: 4, marginTop: 6,
@@ -380,15 +400,11 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 1,
   },
   bottom: {
-    position: 'sticky',
-    bottom: 0,
-    zIndex: 25,
     width: '100%',
     display: 'flex',
     gap: 6,
-    margin: '10px 0 -76px',
-    padding: '10px 0 12px',
-    background: 'linear-gradient(180deg,rgba(5,3,15,0),rgba(5,3,15,0.98) 24%)',
+    marginTop: 12,
+    paddingBottom: 'env(safe-area-inset-bottom, 0)',
   },
   btn: {
     flex: 1, padding: 10, fontSize: 13, fontWeight: 'bold',

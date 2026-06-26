@@ -132,6 +132,16 @@ export async function purchaseItem(itemId: string): Promise<IapResult> {
 /* ===== 리더보드 ===== */
 export type LeaderEntry = { userId: string; nickname: string; score: number; rank: number };
 
+function readLocalLeaderboard(key: string): any[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    localStorage.removeItem(key);
+    return [];
+  }
+}
+
 export async function submitScore(score: number, leaderboardId = 'wave'): Promise<void> {
   await ensureSdk();
   if (sdkApi?.submitScore) {
@@ -139,7 +149,7 @@ export async function submitScore(score: number, leaderboardId = 'wave'): Promis
   }
   // Fallback: localStorage 저장
   const key = `lb_${leaderboardId}`;
-  const cur = JSON.parse(localStorage.getItem(key) || '[]');
+  const cur = readLocalLeaderboard(key);
   const user = await getUser();
   cur.push({ userId: user.userId, nickname: user.nickname, score, ts: Date.now() });
   cur.sort((a: any, b: any) => b.score - a.score);
@@ -155,7 +165,7 @@ export async function getLeaderboard(leaderboardId = 'wave', top = 10): Promise<
   }
   // Fallback
   const key = `lb_${leaderboardId}`;
-  const cur = JSON.parse(localStorage.getItem(key) || '[]');
+  const cur = readLocalLeaderboard(key);
   return cur.slice(0, top).map((e: any, i: number) => ({
     userId: e.userId, nickname: e.nickname, score: e.score, rank: i + 1,
   }));

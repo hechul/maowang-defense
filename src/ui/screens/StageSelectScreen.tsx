@@ -261,7 +261,7 @@ const styles: Record<string, React.CSSProperties> = {
   chapterTab: {
     flex: 1, padding: '6px 4px',
     background: 'rgba(45,27,78,0.6)', border: '1px solid #4a3a6e',
-    borderRadius: 5, color: '#bbb', fontSize: 10, fontWeight: 'bold',
+    borderRadius: 5, color: '#bbb', fontSize: 11, fontWeight: 'bold',
     cursor: 'pointer', fontFamily: 'inherit',
     letterSpacing: 0.5,
   },
@@ -271,7 +271,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFEAA7',
     boxShadow: '0 0 6px rgba(253,203,110,0.4)',
   },
-  chapterCount: { color: '#FDCB6E', fontSize: 9, marginLeft: 4, fontWeight: 'normal' },
+  chapterCount: { color: '#FDCB6E', fontSize: 10, marginLeft: 4, fontWeight: 'normal' },
   stageList: { display: 'flex', flexDirection: 'column', gap: 10 },
   stageCard: {
     position: 'relative',
@@ -303,7 +303,7 @@ const styles: Record<string, React.CSSProperties> = {
   recBadge: {
     position: 'absolute', top: -8, right: 8,
     background: 'linear-gradient(180deg,#FD79A8,#D6306E)',
-    color: '#fff', fontSize: 9, fontWeight: 'bold',
+    color: '#fff', fontSize: 10, fontWeight: 'bold',
     padding: '2px 6px', borderRadius: 4,
     letterSpacing: 1,
     boxShadow: '0 2px 0 #4a0a0a',
@@ -347,14 +347,14 @@ const styles: Record<string, React.CSSProperties> = {
   stageTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
   stageIcon: { fontSize: 22 },
   stageIndex: {
-    fontSize: 9, letterSpacing: 2, color: '#a55eea', flex: 1,
+    fontSize: 10, letterSpacing: 2, color: '#a55eea', flex: 1,
   },
   starsRow: { color: '#FDCB6E', fontSize: 11, letterSpacing: 1 },
   stageName: { fontSize: 14, fontWeight: 'bold', color: '#FFEAA7', marginBottom: 2 },
-  stageSub: { fontSize: 10, color: '#bbb', marginBottom: 4 },
-  stageMeta: { fontSize: 10, color: '#FDCB6E', marginTop: 2 },
-  lockHint: { fontSize: 9, color: '#666', marginTop: 4, fontStyle: 'italic' },
-  firstReward: { fontSize: 10, color: '#FFEAA7', marginTop: 5 },
+  stageSub: { fontSize: 11, color: '#bbb', marginBottom: 4 },
+  stageMeta: { fontSize: 11, color: '#FDCB6E', marginTop: 2 },
+  lockHint: { fontSize: 11, color: '#666', marginTop: 4, fontStyle: 'italic' },
+  firstReward: { fontSize: 11, color: '#FFEAA7', marginTop: 5 },
   unlockHint: { color: '#FD79A8' },
   tutOverlay: {
     position: 'fixed', inset: 0, zIndex: 9000,

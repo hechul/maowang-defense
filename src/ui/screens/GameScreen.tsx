@@ -515,7 +515,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       return {
         tone: 'danger',
         label: '성문 압박',
-        text: canRallyNow ? '돌격 또는 버팀 카드로 시간 벌기' : '버팀·제압 카드로 시간 벌기',
+        text: canRallyNow ? '전열 돌격 또는 버팀 카드' : '버팀·제압 카드가 우선',
       };
     }
     if (aliveMonsters <= 0 && aliveHeroes > 0) {
@@ -531,10 +531,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
   })();
   const waveBreakUsed = snap.waveBreakUsed ?? { heal: false, mpRefill: false, freespin: false };
   const waveBreakCosts = { heal: 50, mpRefill: 30, freespin: 40 };
+  const branchChoicePending = !!(snap.pendingBranchChoices && snap.pendingBranchChoices.length > 0);
   const waveBreakAffordable = {
     heal: stones >= waveBreakCosts.heal,
     mpRefill: stones >= waveBreakCosts.mpRefill,
-    freespin: stones >= waveBreakCosts.freespin,
+    freespin: stones >= waveBreakCosts.freespin && !branchChoicePending,
   };
   const [waveBreakDetailsOpen, setWaveBreakDetailsOpen] = useState(false);
   const waveBreakRecommendedKey: 'heal' | 'mpRefill' | 'freespin' =
@@ -566,11 +567,13 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
     },
     freespin: {
       icon: '🎴',
-      name: '무료 카드 준비',
-      tip: waveBreakAffordable.freespin ? '다음 웨이브 전 빌드 보강' : '영혼석 부족',
+      name: '무료 카드 즉시 선택',
+      tip: branchChoicePending
+        ? '분기 선택 후 사용 가능'
+        : waveBreakAffordable.freespin ? '정비창을 닫고 카드 1장을 고릅니다' : '영혼석 부족',
       used: waveBreakUsed.freespin,
       affordable: waveBreakAffordable.freespin,
-      recommended: waveBreakRecommendedKey === 'freespin' && waveBreakAffordable.freespin && !waveBreakUsed.freespin,
+      recommended: !branchChoicePending && waveBreakRecommendedKey === 'freespin' && waveBreakAffordable.freespin && !waveBreakUsed.freespin,
       cost: waveBreakCosts.freespin,
       onClick: () => eng()?.waveBreakFreeSpin(),
     },
@@ -934,16 +937,16 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                 {cardPickPending && snap.cardChoices
                 ? '소환 중...'
                 : snap.slotActive
-                ? '봉인을 깨는 중... 탭하면 즉시 공개'
-                : snap.slotTripleReveal
-                  ? '✨ 같은 카드 3장 — 한 장 선택하세요'
+                ? '탭해서 즉시 공개'
+                  : snap.slotTripleReveal
+                    ? '같은 카드 3장 — 1장 선택'
                   : monsterFull
-                    ? `⚠ ${snap.aliveMonsters}/${monsterCap} — 처치 후 다시 펼치기`
+                    ? `${snap.aliveMonsters}/${monsterCap} 가득 — 처치 후 가능`
                     : snap.autoReveal && snap.cardChoices
                       ? `🔁 자동 선택 ${(snap.autoPickT ?? 0).toFixed(1)}s`
                       : earlyChoiceMode
-                        ? '한 장 선택 = 바로 소환'
-                        : '운명의 카드 — 한 장을 선택하세요'}
+                        ? '탭하면 바로 소환'
+                        : '카드 1장 선택'}
             </div>
           </div>
         )}
@@ -1117,8 +1120,8 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                       </div>
                     )}
                     <div style={styles.cardName}>{def?.name || id}</div>
-                    {cardRecommendation && (
-                      <div style={styles.cardRecommendation}>추천 · {cardRecommendation} · 탭해서 선택</div>
+                    {cardRecommendation && !evoImminent && (
+                      <div style={styles.cardRecommendation}>추천 · {cardRecommendation}</div>
                     )}
                     {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && (
                       <div style={styles.cardActionHint}>탭해서 소환</div>
@@ -1126,7 +1129,7 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     {earlyChoiceMode && (
                       <div style={styles.cardRoleHint}>{role.hint}</div>
                     )}
-                    {!earlyChoiceMode && (
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && (
                       <div style={styles.cardStats}>
                         <span style={styles.cardStat}>체력 {def?.hp ?? '?'}</span>
                         <span style={styles.cardStatDivider}>·</span>
@@ -1143,10 +1146,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                     {!earlyChoiceMode && rarity === 'legendary' && (
                       <div style={styles.cardTradeoff}>⚠ 픽 시 마력 -50</div>
                     )}
-                    {!earlyChoiceMode && def?.tags.includes('tank') && tankCostReliefAvailable && (snap.cardRevealCount ?? 0) > 2 && (
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && def?.tags.includes('tank') && tankCostReliefAvailable && (snap.cardRevealCount ?? 0) > 2 && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 비용 완화</div>
                     )}
-                    {!earlyChoiceMode && def?.tags.includes('magic') && rarity !== 'legendary' && (
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && def?.tags.includes('magic') && rarity !== 'legendary' && (
                       <div style={styles.cardTradeoffPositive}>+ 다음 마법 등장률 ↑</div>
                     )}
                     {!earlyChoiceMode && evoImminent && (
@@ -1157,12 +1160,12 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
                         <div style={styles.cardBadgeEvolveHint}>← 픽 = 즉시 진화</div>
                       </>
                     )}
-                    {!earlyChoiceMode && !evoImminent && synergyTrigger && (
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && synergyTrigger && (
                       <div style={styles.cardBadgeSynergy}>
                         + {synergyTrigger.name}
                       </div>
                     )}
-                    {!earlyChoiceMode && !evoImminent && !synergyTrigger && aliveSame > 0 && def?.evolveTo && (
+                    {!earlyChoiceMode && !cardRecommendation && !evoImminent && !synergyTrigger && aliveSame > 0 && def?.evolveTo && (
                       <div style={styles.cardBadgeProgress}>
                         진화 {aliveSame + 1}/{snap.evoNeed} (살아있는)
                       </div>
@@ -1243,14 +1246,10 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
               : lastChanceReveal
                 ? '성문 위기 · 지금 누르기'
               : cantReveal
-                ? (snap.aliveMonsters ?? 0) > 0
-                  ? `${missingMp} 부족 · 처치하면 카드 가능`
-                  : (snap.aliveHeroes ?? 0) > 0
-                    ? `약 ${waitSeconds}초 뒤 카드 가능`
-                    : `${missingMp} 마력 더 (약 ${waitSeconds}초)`
+                ? `약 ${waitSeconds}초 뒤 가능`
               : (snap.cardRevealCount ?? 0) < 2
-                ? `🔮 ${snap.cardCost} 마력 ⚡할인(${(snap.cardRevealCount ?? 0) + 1}/2)`
-                : `🔮 ${snap.cardCost} 마력`;
+                ? `마력 ${snap.cardCost} · 초반 할인`
+                : `마력 ${snap.cardCost}`;
             return (
               <button
                 style={{
@@ -1536,11 +1535,11 @@ export function GameScreen({ onGameOver, challengeId = null, stageId = null, mod
       {snap.waveBreakActive && (
         <div style={styles.waveBreakOverlay}>
           <div style={styles.waveBreakCard}>
-            <h2 style={styles.waveBreakTitle}>준비 단계</h2>
+            <h2 style={styles.waveBreakTitle}>웨이브 정비</h2>
             <div style={styles.waveBreakSub}>
-              다음 웨이브 — <b style={{ color: '#FFEAA7' }}>WAVE {snap.wave}</b><br />
+              다음 목표 <b style={{ color: '#FFEAA7' }}>WAVE {snap.wave}</b>
               <span style={{ color: '#888', fontSize: 11 }}>
-                보유 영혼석 {stones.toLocaleString()}개 · 스킵해도 진행 가능
+                {' '}· 영혼석 {stones.toLocaleString()}개
               </span>
             </div>
             <button
@@ -1936,29 +1935,29 @@ const styles: Record<string, React.CSSProperties> = {
   },
   waveBreakOverlay: {
     position: 'absolute', inset: 0, zIndex: 95,
-    background: 'rgba(5,3,15,0.78)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: 18,
+    background: 'linear-gradient(180deg,rgba(5,3,15,0.12),rgba(5,3,15,0.68))',
+    display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    padding: '18px 14px calc(18px + env(safe-area-inset-bottom, 0px))',
     animation: 'fadeIn 0.25s ease-out',
   },
   waveBreakCard: {
-    width: '100%', maxWidth: 280,
+    width: '100%', maxWidth: 320,
     background: 'linear-gradient(180deg,#241a3e 0%,#0d0620 100%)',
     border: '2px solid #26de81', borderRadius: 14,
-    padding: '18px 16px',
-    boxShadow: '0 0 30px rgba(38,222,129,0.4)',
+    padding: '12px 14px',
+    boxShadow: '0 -6px 28px rgba(38,222,129,0.28), 0 5px 0 rgba(0,0,0,0.38)',
     textAlign: 'center',
   },
   waveBreakTitle: {
-    color: '#26de81', fontSize: 20, fontWeight: 'bold',
-    marginBottom: 4, letterSpacing: 3,
+    color: '#26de81', fontSize: 16, fontWeight: 'bold',
+    marginBottom: 3, letterSpacing: 2,
     textShadow: '2px 2px 0 #000',
   },
   waveBreakSub: {
-    color: '#bbb', fontSize: 12, marginBottom: 10,
+    color: '#bbb', fontSize: 12, marginBottom: 8,
   },
   waveBreakActions: {
-    display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10,
+    display: 'flex', flexDirection: 'column', gap: 7, marginTop: 8,
   },
   wbAction: {
     display: 'flex', alignItems: 'center', gap: 10,
@@ -1986,7 +1985,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(0,0,0,0.5)', padding: '2px 7px', borderRadius: 8,
   },
   wbStart: {
-    width: '100%', padding: '13px 16px',
+    width: '100%', padding: '12px 16px',
     background: 'radial-gradient(ellipse at 50% 30%,#26de81,#128047)',
     border: '2px solid #FFEAA7', borderRadius: 8,
     color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 2,
@@ -2327,7 +2326,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
   },
   waveProgressLabel: {
-    color: '#FDCB6E', fontSize: 9, fontWeight: 'bold', letterSpacing: 1,
+    color: '#FDCB6E', fontSize: 11, fontWeight: 'bold', letterSpacing: 1,
     textShadow: '1px 1px 0 #000',
   },
   waveProgressBar: {
@@ -2343,7 +2342,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 0 4px #26de81',
   },
   waveProgressCount: {
-    color: '#fff', fontSize: 9, fontWeight: 'bold',
+    color: '#fff', fontSize: 10, fontWeight: 'bold',
     textShadow: '1px 1px 0 #000', minWidth: 58, textAlign: 'right',
   },
   bossTelegraph: {
@@ -2435,8 +2434,8 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
   },
   cardAreaLabel: {
-    color: '#FFEAA7', fontSize: 11, fontWeight: 'bold',
-    letterSpacing: 2, padding: '4px 12px',
+    color: '#FFEAA7', fontSize: 12, fontWeight: 'bold',
+    letterSpacing: 1.5, padding: '5px 12px',
     background: 'linear-gradient(180deg,#241a3e,#0d0620)',
     border: '1px solid #4a3a6e', borderRadius: 14,
     display: 'inline-block',
@@ -2488,7 +2487,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   card: {
     flex: 1, width: '100%', boxSizing: 'border-box',
-    padding: '7px 5px 12px', maxWidth: 106,
+    padding: '8px 6px 12px', maxWidth: 108,
     background: 'linear-gradient(180deg,#2a1a4e 0%,#1a0e30 60%,#0d0620 100%)',
     borderWidth: 2, borderStyle: 'solid', borderColor: '#4a3a6e', borderRadius: 7,
     color: '#fff', fontWeight: 'bold',
@@ -2496,10 +2495,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 3,
     transition: 'transform 0.1s',
     position: 'relative',
-    minHeight: 124,
+    minHeight: 118,
   },
   cardFirstReveal: {
-    maxWidth: 98,
+    maxWidth: 100,
     minHeight: 108,
     padding: '6px 4px 8px',
     gap: 2,
@@ -2513,12 +2512,12 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '1px 1px 0 #000', fontWeight: 'bold',
   },
   cardName: {
-    fontSize: 12, color: '#FFEAA7',
+    fontSize: 13, color: '#FFEAA7',
     textShadow: '1px 1px 0 #000',
     textAlign: 'center', margin: '2px 0 1px',
   },
   cardRoleHint: {
-    fontSize: 9,
+    fontSize: 10,
     lineHeight: 1.35,
     color: '#dfe6ff',
     textAlign: 'center',
@@ -2562,19 +2561,19 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.3,
   },
   cardRecommendation: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#15082a',
     background: 'linear-gradient(90deg,#FFEAA7,#FDCB6E)',
     borderRadius: 3,
     padding: '2px 4px',
     textAlign: 'center',
     fontWeight: 'bold',
-    letterSpacing: 0.4,
+    letterSpacing: 0.2,
     textShadow: 'none',
     boxShadow: '0 0 6px rgba(253,203,110,0.55)',
   },
   cardActionHint: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#DFE6FF',
     background: 'rgba(116,185,255,0.16)',
     border: '1px solid rgba(116,185,255,0.28)',
@@ -2738,7 +2737,7 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '0 0 10px #FF6B6B, 2px 2px 0 #000',
   },
   btnRevealSub: {
-    fontSize: 11, letterSpacing: 1, color: '#FFEAA7',
+    fontSize: 12, letterSpacing: 0.5, color: '#FFEAA7',
     minWidth: 128,
     background: 'rgba(7,4,18,0.72)',
     borderWidth: 1, borderStyle: 'solid', borderColor: 'rgba(253,203,110,0.45)',

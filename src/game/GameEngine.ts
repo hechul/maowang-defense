@@ -274,6 +274,8 @@ export interface GameOverStats {
   mode?: 'stage' | 'endless';
   /** 게임 진입 모드 (discriminated union — 신규, type-safe) */
   gameMode?: import('./systems/StageSystem').GameMode;
+  /** 일일 도전은 엔드리스 규칙을 쓰므로 별도 플래그로 결과 화면 오인을 막는다. */
+  isDailyRun?: boolean;
   /** 스테이지 모드일 때 stageId */
   stageId?: string | null;
   /** 스테이지 클리어 여부 — true면 ResultScreen이 클리어 분기 사용 */
@@ -1200,7 +1202,7 @@ export class GameEngine {
       this.runStageDef?.id === 'ch1_s1' &&
       this.wave === this.runStageDef.waveLimit
     ) {
-      this.waveTotal = 0;
+      this.waveTotal = Math.max(1, Math.min(this.waveTotal, 2));
     }
     this.waveCleared = false;
     this.waveTimer = this.wave === 1 ? 2.0 : 1.0;
@@ -1404,7 +1406,7 @@ export class GameEngine {
         return;
       }
       this.wave++;
-      this.waveBreak = 2.5;
+      this.waveBreak = this.runMode === 'stage' && this.wave <= 3 ? 3.2 : 2.5;
       // 봉인의 탑 — endless 모드일 때만 floor 추적 + 마일스톤 banner
       if (this.runMode === 'endless') {
         const floor = floorFromWave(this.wave);
@@ -2160,15 +2162,20 @@ export class GameEngine {
       } else if (u.attackPhase === 0) {
         const dir = Math.sign(dx);
         const frontLineStop = Math.max(MONSTER_FRONT_X_MIN, u.frontLineX ?? MONSTER_FRONT_X);
+        let monsterMaxX: number | undefined;
         if (u.team === 'monster' && dir > 0 && u.x >= frontLineStop) {
-          // MVP 전선 고정: 근접 몬스터가 화면 오른쪽 끝까지 따라가 사라지지 않게 한다.
-          // 용사가 다가오면 다시 사거리 안에서 교전한다.
-          u.x = frontLineStop;
-          u._isMoving = false;
-          return;
+          const engageLeash = Math.max(10, Math.min(34, u.range + 8));
+          const canStepIntoVisibleFight = u.range < 70 && target.x <= frontLineStop + engageLeash;
+          if (!canStepIntoVisibleFight) {
+            // 화면 밖 추격은 막되, 근접 교전 직전에는 조금 더 전진해 멈춰 보이지 않게 한다.
+            u.x = frontLineStop;
+            u._isMoving = false;
+            return;
+          }
+          monsterMaxX = frontLineStop + engageLeash;
         }
         u.x += dir * u.effSpd() * dt;
-        this.clampUnitX(u);
+        this.clampUnitX(u, monsterMaxX);
         u.walkT += dt;
         u._isMoving = true;
       }
@@ -2181,12 +2188,13 @@ export class GameEngine {
     }
   }
 
-  private clampUnitX(u: Unit) {
+  private clampUnitX(u: Unit, monsterMaxX?: number) {
     if (u.team === 'hero') {
       u.x = Math.min(HERO_MAX_X, Math.max(HERO_CASTLE_X, u.x));
     } else {
       const frontLine = Math.max(MONSTER_FRONT_X_MIN, u.frontLineX ?? MONSTER_FRONT_X);
-      u.x = Math.min(frontLine, Math.max(MONSTER_BACK_X, u.x));
+      const maxX = monsterMaxX ?? frontLine;
+      u.x = Math.min(maxX, Math.max(MONSTER_BACK_X, u.x));
     }
   }
 
@@ -2988,7 +2996,7 @@ export class GameEngine {
     const natural = 1.8 * surge * mpRegenMul * this.stageMod.mpRegenMul;
     const noDefenseRecovery =
       this.monsters.every((m) => m.dead) && this.heroes.some((h) => !h.dead)
-        ? 14.0
+        ? Math.min(10, 5.5 + this.wave * 0.35)
         : 0;
     const relicAdd = this.fusedEffectAdd('mpRegenAdd');
     const secretAdd = this._secretsAggregate.mpRegenAdd;
@@ -3318,7 +3326,12 @@ export class GameEngine {
   /** 웨이브 사이 — 즉시 카드 펼치기 (영혼석 40) */
   waveBreakFreeSpin() {
     if (!this.waveBreakActive || this.waveBreakUsed.freespin) return false;
-    if (this.cardChoices || this.slot.active || this.pendingRelicChoices || this.pendingEvent || this.pendingBranchChoices) {
+    if (this.pendingBranchChoices) {
+      this.showBanner('분기 선택 먼저', '현재 분기를 고른 뒤 카드 정비가 가능합니다', '#FDCB6E', 1.2);
+      Audio.ui_error();
+      return false;
+    }
+    if (this.cardChoices || this.slot.active || this.pendingRelicChoices || this.pendingEvent) {
       Audio.ui_error();
       return false;
     }
@@ -3329,8 +3342,11 @@ export class GameEngine {
     }
     if (!useSaveStore.getState().spendStones(40)) { Audio.ui_error(); return false; }
     this.waveBreakUsed.freespin = true;
-    // waveBreakActive 중에도 허용하되, UI 카드는 준비 단계 종료 후 자연스럽게 보인다.
     this.beginSpin({ free: true, allowDuringWaveBreak: true });
+    // 재화를 쓴 즉시 카드 선택이 보여야 "돈만 사라짐"으로 느껴지지 않는다.
+    this.waveBreakActive = false;
+    this.paused = false;
+    this.showBanner('무료 카드 준비 완료', '카드 1장을 선택하세요', '#26de81', 1.2);
     return true;
   }
   /** 웨이브 사이 — 다음 웨이브 시작 */
@@ -4845,6 +4861,9 @@ export class GameEngine {
     const ctx = this.ctx;
     const t = performance.now();
 
+    // 스테이지 모드는 React HUD가 Wn/목표를 더 명확히 보여준다.
+    // 캔버스 WAVE/KILL 배지는 무한/도전 모드의 기록 감각용으로만 남긴다.
+    if (this.runMode !== 'stage') {
     // ===== 상단 좌측: 웨이브 배지 (보석 카르투시) =====
     {
       const bx = 6, by = 4, bw = 78, bh = 22;
@@ -4915,6 +4934,7 @@ export class GameEngine {
         ctx.font = 'bold 8px sans-serif';
         ctx.fillText(`x${this.combo}`, kx + 60, ky + 10);
       }
+    }
     }
 
     // ===== HP 바 (붉은 보석) — 마왕성 명시 =====
@@ -5164,6 +5184,7 @@ export class GameEngine {
       // 단계 6: 모드/스테이지/클리어 페이로드
       mode: this.runMode,
       gameMode: this.currentMode,
+      isDailyRun: this.isDailyMode,
       stageId: this.runStageId,
       cleared: this.stageCleared,
       firstClear: !!wasFirstClear,

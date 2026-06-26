@@ -7,14 +7,13 @@ export default defineConfig({
     displayName: '마왕키우기',
     primaryColor: '#7B2D8E',  // 마왕 퍼플 (PIXEL §마스터 팔레트)
     icon: '/icon.png',         // 144x144 권장
-    bridgeColor: 'basic',
   },
   web: {
     host: 'localhost',
     port: 5173,
     commands: {
-      dev: { web: { command: 'npm run dev' } },
-      build: { web: { command: 'npm run build' } },
+      dev: 'npm run dev',
+      build: 'npm run build',
     },
   },
   permissions: [],   // 추가 권한 불필요 (게임)

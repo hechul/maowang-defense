@@ -570,6 +570,7 @@ export const useSaveStore = create<SaveState>()(
       },
 
       spendStones: (n) => {
+        if (!Number.isFinite(n) || n <= 0) return false;
         if (get().soulstones < n) return false;
         set((s) => ({ soulstones: s.soulstones - n }));
         return true;

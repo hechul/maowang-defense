@@ -20,6 +20,14 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
   const unlockIds = stage.firstClearReward.unlockRecruitIds ?? [];
   const featureIds = stage.firstClearReward.unlockFeatureIds ?? [];
   const unlockNames = unlockIds.map((id) => getRecruitById(id)?.name ?? id);
+  const tagLabels: Record<string, string> = {
+    undead: '언데드',
+    zombie: '좀비',
+    fire: '화염',
+    magic: '마법',
+    tank: '탱커',
+    dark: '어둠',
+  };
   const featureLabels = featureIds.map((id) => {
     if (id === 'endless') return '심연 해금';
     if (id === 'challenges') return '도전 해금';
@@ -50,9 +58,18 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
           <div style={styles.desc}>"{stage.description}"</div>
         )}
 
-        <div style={styles.metaRow}>
-          <span style={styles.meta}>웨이브 {stage.waveLimit}</span>
-          {bossDef && <span style={styles.meta}>· 보스 {bossDef.name}</span>}
+        <div style={styles.goalCard}>
+          <div style={styles.goalTop}>이번 목표</div>
+          <div style={styles.goalText}>
+            W{stage.waveLimit}까지 방어{bossDef ? ` · ${bossDef.name} 처치` : ''}
+          </div>
+        </div>
+
+        <div style={styles.tagRow}>
+          <span style={styles.tagLabel}>추천 카드</span>
+          <span style={styles.tagText}>
+            {(stage.recommendedTags ?? []).map((tag) => tagLabels[tag] ?? tag).join(' · ') || '자유 빌드'}
+          </span>
         </div>
 
         <div style={styles.rewardStrip}>
@@ -65,8 +82,8 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
           if (stage.id === 'ch1_s1' && !alreadyCleared) {
             return (
               <div style={styles.modCard}>
-                <span style={styles.modTop}>초보자 보정</span>
-                <div style={styles.modBody}>적이 약하고 마력 회복이 빠릅니다</div>
+                <span style={styles.modTop}>첫 전투 보호</span>
+                <div style={styles.modBody}>적이 조금 약하고 카드 기회가 넉넉합니다</div>
               </div>
             );
           }
@@ -84,13 +101,13 @@ export function StageStartModal({ stage, alreadyCleared, onStart, onClose }: Pro
           if (lines.length === 0) return null;
           return (
             <div style={styles.modCard}>
-              <span style={styles.modTop}>보정</span>
+              <span style={styles.modTop}>전투 특징</span>
               <div style={styles.modBody}>{lines.join(' · ')}</div>
             </div>
           );
         })()}
 
-        <button style={styles.btnStart} onClick={onStart}>⚔ 도전 시작</button>
+        <button style={styles.btnStart} onClick={onStart}>⚔ 침공 막기</button>
         <button style={styles.btnClose} onClick={onClose}>닫기</button>
       </div>
     </div>
@@ -118,10 +135,33 @@ const styles: Record<string, React.CSSProperties> = {
   indexLabel: { fontSize: 9, color: '#a55eea', letterSpacing: 1.5, flex: 1 },
   clearedTag: { fontSize: 9, color: '#FDCB6E', fontWeight: 'bold' },
   title: { fontSize: 16, fontWeight: 'bold', color: '#FFEAA7', marginBottom: 2 },
-  subtitle: { fontSize: 10, color: '#FD79A8', marginBottom: 6, fontStyle: 'italic' },
+  subtitle: { fontSize: 11, color: '#FD79A8', marginBottom: 6, fontStyle: 'italic' },
   desc: { fontSize: 11, color: '#c7bdd6', marginBottom: 8, lineHeight: 1.5 },
-  metaRow: { fontSize: 10, color: '#888', marginBottom: 4 },
-  meta: { marginRight: 4 },
+  goalCard: {
+    background: 'rgba(0,0,0,0.28)',
+    border: '1px solid rgba(253,203,110,0.3)',
+    borderRadius: 5,
+    padding: '7px 8px',
+    marginBottom: 6,
+  },
+  goalTop: { fontSize: 9, color: '#FDCB6E', fontWeight: 'bold', letterSpacing: 1.2, marginBottom: 2 },
+  goalText: { fontSize: 12, color: '#fff', fontWeight: 'bold', lineHeight: 1.35 },
+  tagRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  tagLabel: {
+    flexShrink: 0,
+    fontSize: 9,
+    color: '#1a0828',
+    background: '#74B9FF',
+    borderRadius: 3,
+    padding: '2px 5px',
+    fontWeight: 'bold',
+  },
+  tagText: { fontSize: 11, color: '#dfe6ff', lineHeight: 1.35 },
   rewardStrip: {
     display: 'flex', gap: 6, alignItems: 'center',
     background: 'rgba(253,203,110,0.1)',
@@ -140,8 +180,8 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(255,107,107,0.4)', borderRadius: 4,
     padding: '5px 8px', marginBottom: 8,
   },
-  modTop: { fontSize: 9, color: '#FF7675', fontWeight: 'bold' },
-  modBody: { fontSize: 10, color: '#FFEAA7' },
+  modTop: { fontSize: 10, color: '#FF7675', fontWeight: 'bold' },
+  modBody: { fontSize: 11, color: '#FFEAA7', lineHeight: 1.35 },
   btnStart: {
     width: '100%', padding: '11px',
     background: 'radial-gradient(ellipse at 50% 30%, #FF7675 0%, #D63031 50%, #7a1818 100%)',

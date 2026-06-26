@@ -106,13 +106,17 @@ const SKILL_REASON: Record<string, string> = {
   startMon: '시작부터 군세',
 };
 
-export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: {
+export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage, onStartEndless, onRetryChallenge }: {
   stats: GameOverStats | null;
   onNavigate: (s: ScreenId) => void;
   /** 클리어 후 다음 스테이지 즉시 진입 */
   onStartStage?: (stageId: string) => void;
   /** 같은 스테이지 재도전 (실패 시) */
   onRetryStage?: (stageId: string) => void;
+  /** 일반/심연 전투 재시작. 직전 daily/challenge 상태가 섞이지 않게 App 래퍼를 탄다. */
+  onStartEndless?: () => void;
+  /** 같은 챌린지 재도전. activeChallengeId 잔존에 의존하지 않게 명시한다. */
+  onRetryChallenge?: (challengeId: string) => void;
 }) {
   const bestWave = useSaveStore((s) => s.bestWave);
   const addStones = useSaveStore((s) => s.addStones);
@@ -206,8 +210,8 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
       };
     }
   }, [stats, addDemonExp, addSeasonXp, recordChallengeStar, bumpDeathStreak, resetDeathStreak]);
-  // 일일 모드인지 확인 — store에 dailySeed.attempted = true 갱신된 후
-  const isDailyMode = stats?.gameMode?.kind === 'endless' && useSaveStore.getState().dailySeed.date === new Date().toISOString().slice(0, 10);
+  // 일일 도전은 엔드리스 전투 규칙을 공유하므로 결과 payload의 명시 플래그만 신뢰한다.
+  const isDailyMode = !!stats?.isDailyRun;
   const dailyHint = isDailyMode
     ? pickDailyMicroLine(MICRO_LINES.dailySeedDaily, new Date().toISOString().slice(0, 10))
     : '';
@@ -361,6 +365,20 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
             : `🏆 도전 모드 — 웨이브 ${stats.wave}`;
         })()
       : (isNewRecord ? `이전 ${bestWave} → ${stats.wave} 웨이브` : `${runs}회차 — 다음 침공 준비`);
+  const retryNonStage = () => {
+    if (stats.isDailyRun) {
+      onNavigate('daily');
+      return;
+    }
+    if (isChallengeMode) {
+      const challengeId = gm.kind === 'challenge' ? gm.challengeId : null;
+      if (challengeId && onRetryChallenge) onRetryChallenge(challengeId);
+      else onNavigate('challenges');
+      return;
+    }
+    if (onStartEndless) onStartEndless();
+    else onNavigate('game');
+  };
 
   return (
     <div style={styles.root}>
@@ -486,15 +504,6 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           </div>
         )}
       </div>
-
-      {showMetaFlavor && (
-        <button
-          style={styles.resultDetailsToggle}
-          onClick={() => setShowResultDetails((v) => !v)}
-        >
-          {showResultDetails ? '전투 상세 접기' : '전투 상세 보기'}
-        </button>
-      )}
 
       {/* 사망 원인 추정 — stage clear에서는 숨김 (정보 다이어트), fail/endless에선 유지 */}
       {!isNewRecord && !stageCleared && (!showMetaFlavor || showResultDetails) && (
@@ -626,7 +635,13 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
 
       {/* ★ 추천 강화 카드 — 사망 원인에 따라 컨텍스트 변경 (강조판) */}
       {recommendedUpgrade && !stageCleared && (
-        <div style={styles.recCard}>
+        <button
+          style={styles.recCard}
+          onClick={() => {
+            window.location.hash = `skill=${recommendedUpgrade.id}`;
+            onNavigate('skills');
+          }}
+        >
           <div style={styles.recTop}>
             💡 추천 강화 — {SKILL_REASON[recommendedUpgrade.id] || '다음 런 보강'}
           </div>
@@ -635,7 +650,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
             <span style={styles.recLabel}>{recommendedUpgrade.label}</span>
             <span style={styles.recCost}>💎 {recommendedUpgrade.cost}</span>
           </div>
-        </div>
+        </button>
       )}
 
       {/* 영혼석 부족 시 다음 목표 표시 */}
@@ -672,7 +687,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
         // CTA 우선순위:
         //  1) 모집 해금 있으면 [새 부하 모집하기] 강조
         //  2) 모집 해금 없으면 [다음 침공 막기] 강조
-        //  3) 보조: [다음 스테이지/모집소], [마왕성으로]
+        //  3) 보조: [다음 스테이지/모집소]만 남겨 결과 화면의 선택지를 줄인다.
         return (
           <>
             {hasRecruitUnlock ? (
@@ -710,9 +725,6 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
                 👹 모집소 보기
               </button>
             )}
-            <button style={styles.btnRetrySecondary} onClick={() => onNavigate('castleHub')}>
-              🏰 마왕성으로
-            </button>
           </>
         );
       })() : isStageMode && !stageCleared ? (
@@ -761,7 +773,7 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
           >
             🛠 강화하고 재도전
           </button>
-          <button style={styles.btnRetrySecondary} onClick={() => onNavigate('game')}>
+          <button style={styles.btnRetrySecondary} onClick={retryNonStage}>
             ⚔ 바로 재도전
           </button>
         </>
@@ -769,9 +781,18 @@ export function ResultScreen({ stats, onNavigate, onStartStage, onRetryStage }: 
         <button
           style={styles.btnPrimary}
           className="retry-pulse"
-          onClick={() => onNavigate('game')}
+          onClick={retryNonStage}
         >
           ⚔ 다시 도전
+        </button>
+      )}
+
+      {showMetaFlavor && (
+        <button
+          style={styles.resultDetailsToggle}
+          onClick={() => setShowResultDetails((v) => !v)}
+        >
+          {showResultDetails ? '전투 상세 접기' : '전투 상세 보기'}
         </button>
       )}
       <style>{`
@@ -1018,7 +1039,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '7px 12px', marginTop: -6, marginBottom: 10,
     background: 'rgba(20,12,42,0.45)',
     border: '1px dashed #4a3a6e', borderRadius: 6,
-    color: '#bbb', fontSize: 10, fontWeight: 'bold',
+    color: '#bbb', fontSize: 11, fontWeight: 'bold',
     fontFamily: 'inherit', cursor: 'pointer',
   },
   btnRetry: {
@@ -1049,6 +1070,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: '2px solid #F5A623', borderRadius: 8,
     padding: '10px 12px', marginBottom: 12,
     boxShadow: '0 0 12px rgba(245,166,35,0.5)',
+    fontFamily: 'inherit',
+    textAlign: 'left',
+    cursor: 'pointer',
   },
   recCardLocked: {
     width: '100%', maxWidth: 280,
@@ -1056,13 +1080,13 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px dashed #4a3a6e', borderRadius: 8,
     padding: '8px 12px', marginBottom: 10,
   },
-  recTop: { color: '#F5A623', fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 5 },
+  recTop: { color: '#F5A623', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 5 },
   recMain: {
     display: 'flex', alignItems: 'center', gap: 8,
     color: '#FFEAA7',
   },
   recIcon: { fontSize: 22, lineHeight: 1, flex: '0 0 auto' },
-  recLabel: { flex: 1, fontSize: 12, fontWeight: 'bold' },
+  recLabel: { flex: 1, fontSize: 13, fontWeight: 'bold' },
   recCost: { fontSize: 11, color: '#FDCB6E', fontWeight: 'bold' },
   btnPrimary: {
     width: '100%', maxWidth: 280,
